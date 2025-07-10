@@ -1,4 +1,3 @@
-// admin-dashboard/src/components/FactoryMap.jsx
 import React, { useEffect, useRef } from 'react';
 
 export default function FactoryMap() {
@@ -7,11 +6,11 @@ export default function FactoryMap() {
   useEffect(() => {
     /* ===== Unity 인스턴스 로드 ===== */
     const buildUrl   = "/unity/Build";
-    const loaderUrl  = buildUrl + "/factory.loader.js";     // ← ★ 빌드 이름
+    const loaderUrl  = buildUrl + "/Build.loader.js";     // ← ★ 빌드 이름
     const config = {
-      dataUrl:        buildUrl + "/factory.data",
-      frameworkUrl:   buildUrl + "/factory.framework.js",
-      codeUrl:        buildUrl + "/factory.wasm",
+      dataUrl:        buildUrl + "/Build.data",
+      frameworkUrl:   buildUrl + "/Build.framework.js",
+      codeUrl:        buildUrl + "/Build.wasm",
       streamingAssetsUrl: "StreamingAssets",
       companyName:    "PeaceEye",
       productName:    "FactoryMonitor",
@@ -36,13 +35,17 @@ export default function FactoryMap() {
     /* === cleanup === */
     return () => {
       script.remove();
-      window.UnityInstance?.Quit();
+      window.UnityInstance.Quit();
     };
   }, []);
 
   return (
     <div style={{ width: '100%', height: 400, background: '#000' }}>
-      <canvas ref={canvasRef} style={{ width:'100%', height:'100%' }} />
+      <canvas
+        id="unity-canvas" 
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%' }}
+      />
     </div>
   );
 }

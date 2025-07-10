@@ -19,3 +19,7 @@ async def websocket_endpoint(ws: WebSocket):
     print("📡 WebSocket client connected")
     while True:
         await ws.send_json({"worker_id": "W-001", "event_type": "danger_enter"})
+
+@app.get("/")
+def read_root():
+    return {"message": "FastAPI is running!"}
