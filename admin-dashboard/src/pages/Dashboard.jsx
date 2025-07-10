@@ -1,54 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Grid } from '@mui/material';
 import FactoryMap from '../components/FactoryMap';
-import AlertBox from '../components/AlertBox';
-import LogTable from '../components/LogTable';
-import { io } from 'socket.io-client';
 
-// 소켓 서버 주소
-const socket = io('http://localhost:3001'); // 백엔드 포트에 따라 조정
+// 🧪 임시 좌표 계산 함수 (worker ID에 따라 랜덤 위치 생성)
+const workerIdToXY = (workerId) => {
+  const seed = parseInt(workerId.toString().slice(-2)) || 1;
+  const x = (seed * 73) % 500;
+  const y = (seed * 91) % 300;
+  return { x, y };
+};
+
+// API URL은 환경변수에서 가져옴
+const apiBase = process.env.REACT_APP_API_URL;
 
 export default function Dashboard() {
-  const [alert, setAlert] = useState({ open: false, msg: '' });
   const [rows, setRows] = useState([]);
 
+  // 🔄 최초 렌더링 시 백엔드에서 로그 목록 가져오기
   useEffect(() => {
-    socket.on('connect', () => {
-      console.log('✅ WebSocket connected');
-    });
+    fetch(`${apiBase}/log`)
+      .then(res => res.json())
+      .then(data => {
+        console.log('📋 기존 로그:', data);
+        setRows(data.slice(-20).reverse().map((item, index) => ({
+          id: index + 1,
+          worker: item.worker_id,
+          event: item.event_type,
+          time: item.timestamp || new Date().toLocaleTimeString()
+        })));
+      })
+      .catch(err => {
+        console.error('❌ 로그 불러오기 실패', err);
 
-    socket.on('workerEvent', (data) => {
-      console.log('📩 수신한 이벤트:', data);
+        // 🔁 실패 시 임시 테스트용 데이터
+        const dummy = [
+          { worker_id: "W-001", event_type: "Entered danger zone" },
+          { worker_id: "W-002", event_type: "Exited danger zone" }
+        ];
+        setRows(dummy.map((d, i) => ({
+          id: i + 1,
+          worker: d.worker_id,
+          event: d.event_type,
+          time: new Date().toLocaleTimeString()
+        })));
 
-      const newRow = {
-        id: rows.length + 1,
-        worker: data.worker_id,
-        event: data.event_type,
-        time: new Date().toLocaleTimeString()
-      };
-
-      setRows(prev => [newRow, ...prev.slice(0, 19)]); // 최대 20개 유지
-      setAlert({ open: true, msg: `${data.worker_id} - ${data.event_type}` });
-      
-      /*  === Unity로 좌표 전달 === */
-      const pos = workerIdToXY(data.worker_id);   // ↖︎ (예) id를 xy로 변환하는 함수
-      if (window.UnityInstance) {
-        window.UnityInstance.SendMessage(
-          "WorkerController",          // Unity C# 스크립트 붙은 GameObject 이름
-          "SetWorkerPosition",         // C# public 함수 이름
-          JSON.stringify({             // 전달할 데이터
-            id: data.worker_id,
-            x: pos.x,
-            y: pos.y
-          })
-        );
-      }
-    });
-
-    return () => {
-      socket.off('workerEvent');
-    };
-  }, [rows]);
+        const pos = workerIdToXY(dummy[0].worker_id);
+        if (window.UnityInstance) {
+          window.UnityInstance.SendMessage(
+            "WorkerController",
+            "SetWorkerPosition",
+            JSON.stringify({
+              id: dummy[0].worker_id,
+              x: pos.x,
+              y: pos.y
+            })
+          );
+        }
+      });
+  }, []);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -60,15 +69,9 @@ export default function Dashboard() {
           {/* 추가 UI 영역 */}
         </Grid>
         <Grid item xs={12}>
-          <LogTable rows={rows} />
         </Grid>
       </Grid>
 
-      <AlertBox
-        open={alert.open}
-        message={alert.msg}
-        onClose={() => setAlert({ ...alert, open: false })}
-      />
     </Container>
   );
 }
