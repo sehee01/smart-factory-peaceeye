@@ -10,7 +10,7 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:3000/api/login', { username, password }, {
+      await axios.post('http://localhost:3000/login', { username, password }, {
         withCredentials: true  // 쿠키 저장 허용
       });
       alert('로그인 성공');
