@@ -1,23 +1,29 @@
-// 1. 모듈 불러오기
+// backend/app.js
 const express = require("express");
-const dotenv = require("dotenv");
-const cors = require("cors");
-
-dotenv.config();
-
-// 2. express 앱 생성
 const app = express();
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
+const dbConnect = require("./config/dbConnect");
+require("dotenv").config();
 
-// 3. 미들웨어 설정
-app.use(cors());
-app.use(express.json()); // JSON 파싱
+// 미들웨어
+app.use(cors({
+  origin: "http://localhost:3000",  // React 앱 주소
+  credentials: true                 // 쿠키 포함 허용
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// 4. 라우터 등록 (항상 app 객체 생성 이후에!)
-app.use("/api", require("./routes/loginRoutes"));        // 로그인, 회원가입
-app.use("/api", require("./routes/protectedRoutes"));    // 보호된 API
+// DB 연결
+dbConnect();
 
-// 5. 서버 실행
-const PORT = process.env.PORT || 3000;
+// ✅ 여기 중요! 모든 로그인/회원가입 요청은 /api로 시작되도록 함
+app.use("/api", require("./routes/loginRoutes"));
+
+// 서버 시작
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`${PORT}번 포트에서 서버 실행 중`);
 });
+
