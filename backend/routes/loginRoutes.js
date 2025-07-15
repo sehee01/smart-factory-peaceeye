@@ -1,18 +1,17 @@
-const express = require("express");
+// routes/loginRoutes.js
+const express = require('express');
 const router = express.Router();
-const {
-  getLogin,
-  loginUser,
-  getRegister,
-  registerAdmin,
-  logout,
-} = require("../controller/loginController");
+const { registerAdmin, loginUser, logout } = require('../controllers/loginController');
 
-router.route("/").get(getLogin).post(loginUser);
+// ❌ 페이지 보여주는 GET 라우트는 제거 (React가 하니까 필요 없음)
 
-router.route("/register").get(getRegister).post(registerAdmin);
+// ✅ 회원가입 처리
+router.post('/register', registerAdmin);
 
-router.route("/logout").get(logout);
+// ✅ 로그인 처리
+router.post('/login', loginUser);
 
-// ✅ 이거 꼭 필요!
+// ✅ 로그아웃 처리
+router.post('/logout', logout);
+
 module.exports = router;

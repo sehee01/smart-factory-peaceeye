@@ -9,11 +9,18 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('/api/register', { username, password, password2 });
-      alert('회원가입 성공!');
-      window.location.href = '/';
+      const res = await axios.post('http://localhost:3000/api/register', {
+        username,
+        password,
+        password2, // 이걸 꼭 보내야 백엔드가 비교할 수 있어요
+      }, {
+        withCredentials: true,  
+      });
+
+      alert(res.data.message || '회원가입 성공');
+      window.location.href = '/'; // 회원가입 후 로그인 페이지로 이동
     } catch (err) {
-      alert(err.response.data.message || '회원가입 실패');
+      alert(err.response?.data?.message || '회원가입 실패');
     }
   };
 
@@ -21,9 +28,27 @@ function Register() {
     <div>
       <h2>회원가입</h2>
       <form onSubmit={handleSubmit}>
-        <input type="text" placeholder="아이디" value={username} onChange={e => setUsername(e.target.value)} required />
-        <input type="password" placeholder="비밀번호" value={password} onChange={e => setPassword(e.target.value)} required />
-        <input type="password" placeholder="비밀번호 확인" value={password2} onChange={e => setPassword2(e.target.value)} required />
+        <input
+          type="text"
+          placeholder="아이디"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="비밀번호"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="비밀번호 확인"
+          value={password2}
+          onChange={(e) => setPassword2(e.target.value)}
+          required
+        />
         <button type="submit">회원가입</button>
       </form>
     </div>
