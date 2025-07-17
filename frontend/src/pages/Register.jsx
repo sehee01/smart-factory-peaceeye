@@ -9,7 +9,11 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+<<<<<<< HEAD
       const res = await axios.post('http://localhost:3000/register', {
+=======
+      const res = await axios.post('http://localhost:5000/register', {
+>>>>>>> origin/sehee
         username,
         password,
         password2, // 이걸 꼭 보내야 백엔드가 비교할 수 있어요
