@@ -1,4 +1,5 @@
 import cv2
+import os
 from datetime import datetime
 from homography_calibration import HomographyCalibrator
 
@@ -9,8 +10,12 @@ def save_coordinates_to_txt(calibrator, filename=None):
         return
 
     if filename is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"calibration_coords_{timestamp}.txt"
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 스크립트 파일의 현재 위치를 기준으로 절대 경로를 계산
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "..", "result", "matrix")
+        os.makedirs(output_dir, exist_ok=True)
+        filename = os.path.join(output_dir, f"calibration_coords_{calibrator.camera_id}.txt")
     
     with open(filename, 'w', encoding='utf-8') as f:
         f.write("=== Homography Calibration Report ===\n")
@@ -35,7 +40,7 @@ def save_coordinates_to_txt(calibrator, filename=None):
 
 
 def run_calibration_process():
-    video_path = "test_vedio/0_te3.mp4" #영상주소
+    video_path = "smart-factory-peaceeye/test_vedio/0_te3.mp4" #영상주소
     camera_id = 0                       #카메라 id
     window_name = f'Homography Calibration (Camera {camera_id})'
 
