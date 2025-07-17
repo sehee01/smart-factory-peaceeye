@@ -9,7 +9,7 @@ require("dotenv").config();
 
 // 미들웨어
 app.use(cors({
-  origin: "http://localhost:3001",  // React 앱 주소
+  origin: "http://localhost:3000",  // React 앱 주소
   credentials: true                 // 쿠키 포함 허용
 }));
 app.use(express.json());
