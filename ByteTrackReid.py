@@ -5,6 +5,7 @@ import sys
 import threading
 import numpy as np
 import argparse
+import queue
 from ultralytics import YOLO
 from scipy.spatial.distance import cdist
 
@@ -22,6 +23,7 @@ except ImportError as e:
     print(f"필수 라이브러리 로드 실패: {e}")
     print("ByteTrack 또는 deep-person-reid 경로를 확인하거나 'pip install -r requirements.txt'를 실행하세요.")
     sys.exit(1)
+
 
 
 # --- np.float 호환성 문제 해결 ---
@@ -213,8 +215,8 @@ def remove_duplicate_stracks(stracks1, stracks2):
     return stracks1, stracks2
 
 # --- 메인 실행 로직 ---
-def run_tracking(video_path, yolo_model_path, reid_extractor):
-    """하나의 비디오 스트림에 대한 추적을 실행하는 함수"""
+def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_event):
+    """하나의 비디오 스트림에 대한 추적을 실행하고 결과를 큐에 넣는 함수"""
     model = YOLO(yolo_model_path)
     classNames = model.names
 
@@ -225,7 +227,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor):
     person_count = 0
     tracked_ids = set()
 
-    while cap.isOpened():
+    while cap.isOpened() and not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
             break
@@ -268,29 +270,63 @@ def run_tracking(video_path, yolo_model_path, reid_extractor):
                 print(f"--- {video_path} ---")
                 print(json.dumps(frame_detections_json, indent=2))
 
-        cv2.putText(frame, f"Total Persons: {person_count}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
-        cv2.imshow(f"Tracking - {video_path}", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # 처리된 프레임을 큐에 삽입
+        frame_queue.put((video_path, frame))
 
     cap.release()
-    cv2.destroyAllWindows()
+    # 해당 비디오 처리가 끝났음을 알리는 신호(None)를 큐에 삽입
+    frame_queue.put((video_path, None))
+
 
 def main(args):
-    """메인 함수: Re-ID 모델을 초기화하고 각 비디오에 대한 추적 스레드를 시작"""
+    """메인 함수: Re-ID 모델 초기화, 워커 스레드 시작 및 GUI 처리"""
     reid_extractor = FeatureExtractor(
         model_name='osnet_ibn_x1_0',
         model_path=args.reid_model if args.reid_model else None,
         device='cuda' if torch.cuda.is_available() else 'cpu'
     )
 
+    frame_queue = queue.Queue()
+    stop_event = threading.Event()
+    
     threads = []
     for video_path in args.videos:
-        thread = threading.Thread(target=run_tracking, args=(video_path, args.yolo_model, reid_extractor), daemon=True)
+        # 스레드에 frame_queue와 stop_event 전달
+        thread = threading.Thread(target=run_tracking, args=(video_path, args.yolo_model, reid_extractor, frame_queue, stop_event), daemon=True)
         threads.append(thread)
         thread.start()
 
+    latest_frames = {}
+    active_videos = set(args.videos)
+
+    while active_videos:
+        try:
+            # 큐에서 프레임 가져오기 (타임아웃을 사용하여 GUI가 멈추지 않도록 함)
+            video_path, frame = frame_queue.get(timeout=0.1)
+
+            if frame is None:  # 스레드 종료 신호
+                active_videos.discard(video_path)
+                if video_path in latest_frames:
+                    del latest_frames[video_path]
+                cv2.destroyWindow(f"Tracking - {video_path}")
+                continue
+            
+            latest_frames[video_path] = frame
+
+        except queue.Empty:
+            # 큐가 비어있으면 현재 프레임들을 다시 그림
+            pass
+
+        # 모든 활성 비디오의 최신 프레임을 화면에 표시
+        for path, f in latest_frames.items():
+            cv2.imshow(f"Tracking - {path}", f)
+
+        # 'q'를 누르면 모든 스레드에 종료 신호를 보내고 루프 탈출
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            stop_event.set()
+            break
+    
+    # 모든 스레드가 정상적으로 종료될 때까지 대기
     for thread in threads:
         thread.join()
 
@@ -298,7 +334,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack and Re-ID for Multi-Video Tracking")
-    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/test01.mp4", "test_video/0_te3.mp4"], help='List of video file paths.')
+    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/test01.mp4","test_video/0_te2.mp4"], help='List of video file paths.')
     parser.add_argument('--yolo_model', type=str, default="models/weights/best.pt", help='Path to the YOLOv8 model file.')
     parser.add_argument('--reid_model', type=str, default="", help='Path to the Re-ID model weights. Leave empty to download pretrained.')
     
