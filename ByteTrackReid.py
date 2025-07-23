@@ -15,10 +15,12 @@ try:
     # ByteTrack, deep-person-reid가 현재 프로젝트 폴더 내에 있다고 가정
     sys.path.append('ByteTrack')
     sys.path.append('deep-person-reid-master')
+    # sys.path.append('TensorRT-8.5.3.1')
     from yolox.tracker.byte_tracker import BYTETracker, STrack as OriginalSTrack, TrackState
     from yolox.tracker.kalman_filter import KalmanFilter
     from yolox.tracker.matching import iou_distance, linear_assignment
     from torchreid.utils.feature_extractor import FeatureExtractor
+    import tensorrt as trt
 except ImportError as e:
     print(f"필수 라이브러리 로드 실패: {e}")
     print("ByteTrack 또는 deep-person-reid 경로를 확인하거나 'pip install -r requirements.txt'를 실행하세요.")
@@ -217,7 +219,7 @@ def remove_duplicate_stracks(stracks1, stracks2):
 # --- 메인 실행 로직 ---
 def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_event):
     """하나의 비디오 스트림에 대한 추적을 실행하고 결과를 큐에 넣는 함수"""
-    model = YOLO(yolo_model_path)
+    model = YOLO(yolo_model_path, task="detect")
     classNames = model.names
 
     tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=30, mot20=False)
@@ -260,7 +262,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
                     person_count += 1
                 
                 xmin, ymin, xmax, ymax = map(int, t.tlbr)
-                detection_data = {"track_id": int(t.track_id), "bbox_xyxy": [xmin, ymin, xmax, ymax]}
+                detection_data = {"camera_id": int(cli_args.videos.index(video_path)), "track_id": int(t.track_id), "bbox_xyxy": [xmin, ymin, xmax, ymax]} #####전달해주는 JSON파일
                 frame_detections_json.append(detection_data)
 
                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
@@ -283,9 +285,10 @@ def main(args):
     reid_extractor = FeatureExtractor(
         model_name='osnet_ibn_x1_0',
         model_path=args.reid_model if args.reid_model else None,
-        device='cuda' if torch.cuda.is_available() else 'cpu'
+        device='cuda' 
+        # if torch.cuda.is_available() else 'cpu'
     )
-
+    
     frame_queue = queue.Queue()
     stop_event = threading.Event()
     
@@ -335,7 +338,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack and Re-ID for Multi-Video Tracking")
     parser.add_argument('--videos', nargs='+', type=str, default=["test_video/test01.mp4","test_video/0_te2.mp4"], help='List of video file paths.')
-    parser.add_argument('--yolo_model', type=str, default="models/weights/best.pt", help='Path to the YOLOv8 model file.')
+    parser.add_argument('--yolo_model', type=str, default="models/weights/best.engine", help='Path to the YOLOv8 model file.')
     parser.add_argument('--reid_model', type=str, default="", help='Path to the Re-ID model weights. Leave empty to download pretrained.')
     
     cli_args = parser.parse_args()
