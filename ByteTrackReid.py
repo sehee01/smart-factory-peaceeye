@@ -223,7 +223,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
     model = YOLO(yolo_model_path, task="detect")
     classNames = model.names
 
-    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=30, mot20=False)
+    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=150, mot20=False)
     tracker = BYTETrackerWithReID(tracker_args, frame_rate=30)
 
     cap = cv2.VideoCapture(video_path)
@@ -263,7 +263,13 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
                     person_count += 1
                 
                 xmin, ymin, xmax, ymax = map(int, t.tlbr)
-                detection_data = {"camera_id": int(cli_args.videos.index(video_path)), "track_id": int(t.track_id), "bbox_xyxy": [xmin, ymin, xmax, ymax]} #####전달해주는 JSON파일
+                point_x = (xmin+xmax)/2
+                point_y = ymin
+                detection_data = {"camera_id": int(cli_args.videos.index(video_path)),
+                                   "track_id": int(t.track_id),
+                                    "bbox_xyxy": [point_x, point_y]}  # 기존 좌표4개에서 x,y두개로 변경
+                #####전달해주는 JSON파일
+                #"bbox_xyxy": [xmin, ymin, xmax, ymax]
                 frame_detections_json.append(detection_data)
 
                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
