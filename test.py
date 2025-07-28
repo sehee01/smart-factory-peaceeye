@@ -182,17 +182,13 @@ class STrack(OriginalSTrack):
                 st.mean = multi_mean[i]
                 st.covariance = multi_covariance[i]
 
-# --- ReID와 IOU를 함께 사용하는 개선된 BYTETracker ---
+# --- IOU만 사용하는 BYTETracker ---
 class BYTETrackerWithReID(BYTETracker):
     """
-    기존 BYTETracker의 update 로직을 ReID feature를 사용하도록 개선합니다.
-    Cascaded Matching(단계적 매칭)을 통해 정확도를 높입니다.
-    1. IOU 기반 매칭: 확실한 트랙들을 먼저 연결합니다.
-    2. Re-ID 기반 매칭: IOU로 찾지 못한 트랙(가려짐 등)을 외형 특징으로 다시 찾아 연결합니다.
+    IOU 매칭만 사용하는 ByteTrack 클래스 (Re-ID 매칭 제거)
     """
     def __init__(self, args, frame_rate=30):
         super().__init__(args, frame_rate)
-        self.reid_thresh = 0.4  # Re-ID 코사인 거리 임계값 (1 - 유사도)
 
     def update(self, dets, img_info, img, reid_extractor):
         self.frame_id += 1
@@ -201,106 +197,144 @@ class BYTETrackerWithReID(BYTETracker):
         lost_stracks = []
         removed_stracks = []
 
-        # 1. 감지된 객체(dets) 전처리
+        # 1. 감지된 객체(dets) 전처리 - ByteTrack 방식
         scores = dets[:, 4]
         bboxes = dets[:, :4]
         
-        # 신뢰도 임계값(track_thresh) 이상의 객체만 'detections'으로 간주
-        remain_inds = scores > self.args.track_thresh #임계값 보다높은 애들은 True인 boolean 배열로 변경
-        high_conf_dets = bboxes[remain_inds] #boolean배열을 적용하여 True만 필터링
-        high_conf_scores = scores[remain_inds] 
+        # 높은 신뢰도 객체 (track_thresh 이상)
+        high_conf_inds = scores > self.args.track_thresh
+        high_conf_dets = bboxes[high_conf_inds]
+        high_conf_scores = scores[high_conf_inds]
         
+        # 낮은 신뢰도 객체 (track_thresh 미만, 0.1 이상)
+        low_conf_inds = (scores < self.args.track_thresh) & (scores > 0.1)
+        low_conf_dets = bboxes[low_conf_inds]
+        low_conf_scores = scores[low_conf_inds]
+        
+        # 높은 신뢰도 객체 처리
         if high_conf_dets.shape[0] > 0:
-            # 이미지에서 객체 부분만 잘라내 Re-ID 특징 추출
+            # 이미지에서 객체 부분만 잘라내 Re-ID 특징 추출 (글로벌 Re-ID용)
             crops = []
             for box in high_conf_dets:
                 x1, y1, x2, y2 = map(int, box)
                 crop = img[y1:y2, x1:x2]
-                if crop.size == 0: # 크기가 0인 crop 방지
-                    crop = np.zeros((128, 64, 3), dtype=np.uint8) #크기가 0이면 오류가 나지 않게 더미 이미지 생성
+                if crop.size == 0:
+                    crop = np.zeros((128, 64, 3), dtype=np.uint8)
                 crops.append(crop)
             
-            features = reid_extractor(crops).cpu().numpy() #크롭 이미지를 넘겨주면 Re-ID모델이 벡터로 변환  (현재프레임에서 탐지된 신뢰도 높은 사람의 수, 벡터-512차원)
-            detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for tlbr, s in zip(high_conf_dets, high_conf_scores)] # 두개를 STrack 객체리스트로 한번에 변환 (바운딩 박스와 신뢰도 매칭)
-                            #yolo는 tlbr형식 topleft,bottomright -> topleft, width, height
-            for d, f in zip(detections, features): #리스트에서 하나씩 꺼내서 반복
-                d.update_features(f) #STrack객체에 특징벡터를 전달
+            features = reid_extractor(crops).cpu().numpy()
+            high_conf_detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for tlbr, s in zip(high_conf_dets, high_conf_scores)]
+            for d, f in zip(high_conf_detections, features):
+                d.update_features(f)
         else:
-            detections = []
+            high_conf_detections = []
+        
+        # 낮은 신뢰도 객체 처리
+        if low_conf_dets.shape[0] > 0:
+            low_conf_detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for tlbr, s in zip(low_conf_dets, low_conf_scores)]
+        else:
+            low_conf_detections = []
 
         # 2. 기존 트랙과 새로 감지된 객체 매칭 준비
         unconfirmed = []
         tracked_stracks = []
         for track in self.tracked_stracks:
-            if not track.is_activated: #탐지된지 얼마 되지 않아 아직 신뢰할 수 없는 임시 트랙
+            if not track.is_activated:
                 unconfirmed.append(track)
             else:
                 tracked_stracks.append(track)
         
         # 추적 중인 트랙과 최근에 잃어버린 트랙을 합쳐 매칭 대상(pool)으로 설정
-        strack_pool = joint_stracks(tracked_stracks, self.lost_stracks) #하나의 리스트로
-        STrack.multi_predict(strack_pool, self.kalman_filter) #strackpool에 있는 모든 트랙에 대해 칼만필터의 예측을 한번에 진행
+        strack_pool = joint_stracks(tracked_stracks, self.lost_stracks)
+        STrack.multi_predict(strack_pool, self.kalman_filter)
 
-        # 3. 단계적 매칭 (Cascaded Matching)
-        # 3-1. IOU 거리 기반 1차 매칭 (가깝고 확실한 경우)
-        dists = iou_distance(strack_pool, detections)
-        matches, u_track, u_detection = linear_assignment(dists, thresh=self.args.match_thresh) #매치o, 매치x, 매치x 매트릭스에서 cost가 가장낮은걸 매칭
-
-        for itracked, idet in matches:
-            track = strack_pool[itracked]
-            det = detections[idet] #현재 프레임에서 새로 발견된 객체 정보
-            if track.state == TrackState.Tracked: #추적되고 있던 객체는 위치만 업데이트
-                track.update(det, self.frame_id) #현재 프레임 정보를 넘겨주어 몇번째 프레임에서 다시 찾았는지 기록
-                activated_stracks.append(track)
-            else: # Lost 상태의 트랙을 다시 찾은 경우
-                track.re_activate(det, self.frame_id, new_id=False) #track의 상태를 TrackState.Lost에서 다시 TrackState.Tracked로 변경
-                refind_stracks.append(track) #new_id=False 이 객체에 새로운 ID를 부여하지 말고 track이 원래 가지고 있던 기존 ID그대로 사용
-
-        # 3-2. Re-ID 특징 기반 2차 매칭 (가려졌거나 멀리 떨어진 경우)
-        # 1차 매칭에서 실패한 '잃어버린 트랙(lost tracks)'과 '감지된 객체'를 대상으로 수행
-        lost_pool = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Lost]
-        remaining_detections = [detections[i] for i in u_detection]
-
-        if len(lost_pool) > 0 and len(remaining_detections) > 0:
-            lost_features = np.array([track.smooth_feat for track in lost_pool])
-            det_features = np.array([det.smooth_feat for det in remaining_detections])
+        # 3. ByteTrack 원래 로직 구현
+        # 3-1. 높은 신뢰도 객체로 기존 트랙 매칭
+        if len(high_conf_detections) > 0:
+            dists = iou_distance(strack_pool, high_conf_detections)
+            matches, u_track, u_detection = linear_assignment(dists, thresh=self.args.match_thresh)
             
-            # 코사인 거리 계산
-            feature_dists = cdist(lost_features, det_features, 'cosine')
-            reid_matches, u_lost, u_det_reid = linear_assignment(feature_dists, thresh=self.reid_thresh) #매치o, 매치x, 매치x 매트릭스에서 cost가 가장낮은걸 매칭
+            print(f"High-conf matching: {len(matches)} matches, {len(u_track)} unmatched tracks, {len(u_detection)} unmatched detections")
 
-            for ilost, idet in reid_matches: #reid_matches는 성공적으로 짝지어진 쌍들의 목록으로 매칭된 쌍들을 하나씩 둘러봄
-                track = lost_pool[ilost] # lost 상태의 STrack객체를 가져옴
-                det = remaining_detections[idet] # 새로 탐지된 객체를 가져옴
-                track.re_activate(det, self.frame_id, new_id=False) #새로 탐지된 위치로 최신화
-                refind_stracks.append(track)
-        
-        # Re-ID로 매칭된 객체는 u_detection에서 제거해야 하지만, 복잡성을 줄이기 위해 생략.
-        # 이로 인해 일부 객체가 중복 처리될 수 있으나, 전체적인 성능에 큰 영향은 없음.
+            for itracked, idet in matches:
+                track = strack_pool[itracked]
+                det = high_conf_detections[idet]
+                if track.state == TrackState.Tracked:
+                    track.update(det, self.frame_id)
+                    activated_stracks.append(track)
+                else:
+                    track.re_activate(det, self.frame_id, new_id=False)
+                    refind_stracks.append(track)
 
-        # 4. 나머지 트랙 처리 및 새로운 트랙 생성
-        # 매칭 안된애들
+        # 3-2. 낮은 신뢰도 객체로 잃어버린 트랙 복구
+        if len(low_conf_detections) > 0:
+            remaining_lost_tracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Lost]
+            
+            print(f"Low-conf recovery: {len(low_conf_detections)} low-conf detections, {len(remaining_lost_tracks)} remaining lost tracks")
+            
+            if len(remaining_lost_tracks) > 0:
+                dists = iou_distance(remaining_lost_tracks, low_conf_detections)
+                matches, u_lost, u_low_det = linear_assignment(dists, thresh=0.5)
+                
+                print(f"Low-conf matching: {len(matches)} recovered tracks")
+
+                for ilost, idet in matches:
+                    track = remaining_lost_tracks[ilost]
+                    det = low_conf_detections[idet]
+                    track.re_activate(det, self.frame_id, new_id=False)
+                    refind_stracks.append(track)
+
+        # 3-3. unconfirmed tracks 처리
+        if len(unconfirmed) > 0 and len(high_conf_detections) > 0:
+            dists = iou_distance(unconfirmed, high_conf_detections)
+            matches, u_unconfirmed, u_detection = linear_assignment(dists, thresh=0.7)
+            
+            print(f"Unconfirmed matching: {len(matches)} matches, {len(u_unconfirmed)} unmatched unconfirmed, {len(u_detection)} unmatched detections")
+            
+            for itracked, idet in matches:
+                track = unconfirmed[itracked]
+                det = high_conf_detections[idet]
+                track.update(det, self.frame_id)
+                activated_stracks.append(track)
+
+        # 4. 나머지 트랙 처리
         remaining_tracked_pool = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
         for track in remaining_tracked_pool:
             track.mark_lost()
             lost_stracks.append(track)
 
-        # 매칭되지 않은 높은 신뢰도의 객체는 새로운 트랙으로 등록
+        # 5. 새로운 트랙 생성 (매칭되지 않은 높은 신뢰도 객체)
+        new_tracks_created = 0
         for i in u_detection:
-            track = detections[i]
-            if track.score >= self.args.track_thresh: #기존에 id와 매칭되지 않은 높은 신뢰도의 객체는 새로운 id를 부여해 트랙에 등록
+            track = high_conf_detections[i]
+            if track.score >= self.args.track_thresh:
                 track.activate(self.kalman_filter, self.frame_id)
                 activated_stracks.append(track)
-
-        # 5. 최종 트랙 리스트 정리
-        self.tracked_stracks = [t for t in self.tracked_stracks if t.state == TrackState.Tracked]
-        self.tracked_stracks = joint_stracks(self.tracked_stracks, activated_stracks) #이번에 새로 activate된 Strack
-        self.tracked_stracks = joint_stracks(self.tracked_stracks, refind_stracks) # 재활성화된 Strack. #self.tarcked_stracks 이번프레임 기준으로 살아있는 모든 트랙 최신화
-        self.lost_stracks = sub_stracks(self.lost_stracks, self.tracked_stracks)
-        self.lost_stracks.extend(lost_stracks) # 너무 오래 lost상태여서 제거하는 strack
-        self.lost_stracks = sub_stracks(self.lost_stracks, self.removed_stracks)  #메모리 누수를 막기 위한 장치 
-        self.removed_stracks.extend(self.lost_stracks) # 메모리 정리 로직 (단순화)
+                new_tracks_created += 1
         
+        if new_tracks_created > 0:
+            print(f"New tracks created: {new_tracks_created}")
+        else:
+            print(f"No new tracks created from {len(u_detection)} unmatched detections")
+
+        # 7. 최종 트랙 리스트 정리
+        self.tracked_stracks = [t for t in self.tracked_stracks if t.state == TrackState.Tracked]
+        self.tracked_stracks = joint_stracks(self.tracked_stracks, activated_stracks)
+        self.tracked_stracks = joint_stracks(self.tracked_stracks, refind_stracks)
+        self.lost_stracks = sub_stracks(self.lost_stracks, self.tracked_stracks)
+        self.lost_stracks.extend(lost_stracks)
+        self.lost_stracks = sub_stracks(self.lost_stracks, self.removed_stracks)
+        
+        # 8. 트랙 정리: track_buffer 프레임 이상 lost 상태인 트랙 제거
+        for track in self.lost_stracks:
+            if self.frame_id - track.end_frame > self.args.track_buffer:
+                track.state = TrackState.Removed
+        
+        # 제거된 트랙들을 removed_stracks에 추가
+        self.removed_stracks = [t for t in self.lost_stracks if t.state == TrackState.Removed]
+        self.lost_stracks = [t for t in self.lost_stracks if t.state != TrackState.Removed]
+        
+        # 중복 트랙 제거
         self.tracked_stracks, self.lost_stracks = remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
         
         return [t for t in self.tracked_stracks if t.is_activated]
@@ -331,92 +365,130 @@ def remove_duplicate_stracks(stracks1, stracks2):
     return stracks1, stracks2
 
 def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_event, reid_manager):
-    """Cross-camera Re-ID가 추가된 추적 함수"""
-    model = YOLO(yolo_model_path, task="detect")
-    classNames = model.names
-    camera_id = cli_args.videos.index(video_path)  # 카메라 ID
+    """ByteTrack 추적 함수 (IOU 매칭만 사용, 글로벌 Re-ID용 특징 추출 포함)"""
+    try:
+        print(f"Starting tracking thread for {video_path}")
+        model = YOLO(yolo_model_path, task="detect")
+        classNames = model.names
+        camera_id = cli_args.videos.index(video_path)  # 카메라 ID
 
-    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=150, mot20=False)
-    tracker = BYTETrackerWithReID(tracker_args, frame_rate=30)
+        tracker_args = argparse.Namespace(track_thresh=0.1, match_thresh=0.8, track_buffer=30, mot20=False)
+        tracker = BYTETrackerWithReID(tracker_args, frame_rate=30)
 
-    cap = cv2.VideoCapture(video_path)
-    local_to_global_map = {}  # 로컬 ID -> 전역 ID 매핑
-
-    while cap.isOpened() and not stop_event.is_set():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # 프레임 처리 (기존 코드와 동일)
-        frame_height, frame_width = frame.shape[:2]
-        target_width = 640
-        scale = target_width / frame_width
-        target_height = int(frame_height * scale)
-        frame = cv2.resize(frame, (target_width, target_height))
-
-        detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0]
-        dets = []
-        for box in detection_results.boxes:
-            cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
-            if classNames[cls_id].lower() in ["person", "persona"]:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                dets.append([x1, y1, x2, y2, conf])
-
-        if len(dets) > 0:
-            online_targets = tracker.update(torch.tensor(dets), frame.shape[:2], frame, reid_extractor)
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video {video_path}")
+            frame_queue.put((video_path, None))
+            return
             
-            frame_detections_json = []
-            for t in online_targets:
-                local_id = t.track_id
-                
-                # Cross-camera Re-ID 수행
-                bbox_info = {
-                    'camera_id': camera_id,
-                    'bbox': t.tlbr.tolist(),
-                    'timestamp': datetime.now()
-                }
-                
-                global_id, is_new = reid_manager.match_or_create(
-                    camera_id, 
-                    local_id, 
-                    t.smooth_feat,  # 안정화된 특징 벡터 사용
-                    bbox_info
-                )
-                
-                # 로컬-전역 ID 매핑 저장
-                local_to_global_map[local_id] = global_id
-                
-                xmin, ymin, xmax, ymax = map(int, t.tlbr)
-                point_x = (xmin + xmax) / 2
-                point_y = ymin
-                
-                detection_data = {
-                    "camera_id": camera_id,
-                    "local_track_id": int(local_id),
-                    "global_track_id": int(global_id),  # 전역 ID 추가
-                    "bbox_xyxy": [point_x, point_y],
-                    "is_new_global": is_new
-                }
-                frame_detections_json.append(detection_data)
+        local_to_global_map = {}  # 로컬 ID -> 전역 ID 매핑
+        frame_count = 0
 
-                # 화면에 전역 ID 표시
-                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                cv2.putText(frame, f'G:{global_id} L:{local_id}', 
-                           (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        while cap.isOpened() and not stop_event.is_set():
+            frame_count += 1
+            ret, frame = cap.read()
+            if not ret:
+                print(f"End of video {video_path} reached at frame {frame_count}")
+                break
 
-            if frame_detections_json:
-                print(f"--- Camera {camera_id} ({video_path}) ---")
-                print(json.dumps(frame_detections_json, indent=2))
+            try:
+                # 프레임 처리 (기존 코드와 동일)
+                frame_height, frame_width = frame.shape[:2]
+                target_width = 640
+                scale = target_width / frame_width
+                target_height = int(frame_height * scale)
+                frame = cv2.resize(frame, (target_width, target_height))
 
-        frame_queue.put((video_path, frame))
+                detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0]
+                dets = []
+                for box in detection_results.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    if classNames[cls_id].lower() in ["person", "persona"]:
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        dets.append([x1, y1, x2, y2, conf])
 
-    # 추적 종료된 ID들 정리
-    for local_id in local_to_global_map:
-        reid_manager.remove_track(camera_id, local_id)
-    
-    cap.release()
-    frame_queue.put((video_path, None))
+                # 프레임 번호와 탐지 결과 출력
+                frame_num = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                print(f"[{video_path}] Frame {frame_num}: Detected {len(dets)} persons, Active: {len(tracker.tracked_stracks)}, Lost: {len(tracker.lost_stracks)}, Removed: {len(tracker.removed_stracks)}")
+                
+                # 신뢰도 정보 출력
+                if len(dets) > 0:
+                    confidences = [det[4] for det in dets]
+                    print(f"[{video_path}] Confidences: {[f'{c:.3f}' for c in confidences]}")
+                
+                # 모든 프레임에서 트래킹 업데이트 실행 (탐지된 객체가 없어도)
+                if len(dets) > 0:
+                    online_targets = tracker.update(torch.tensor(dets), frame.shape[:2], frame, reid_extractor)
+                else:
+                    # 탐지된 객체가 없어도 빈 텐서로 트래킹 업데이트
+                    online_targets = tracker.update(torch.empty((0, 5)), frame.shape[:2], frame, reid_extractor)
+                
+                # 바운딩 박스 그리기 (탐지된 객체가 있든 없든 트래킹 결과 표시)
+                frame_detections_json = []
+                for t in online_targets:
+                    local_id = t.track_id
+                    
+                    # Cross-camera Re-ID 수행 (글로벌 Re-ID용)
+                    bbox_info = {
+                        'camera_id': camera_id,
+                        'bbox': t.tlbr.tolist(),
+                        'timestamp': datetime.now()
+                    }
+                    
+                    global_id, is_new = reid_manager.match_or_create(
+                        camera_id, 
+                        local_id, 
+                        t.smooth_feat,  # 안정화된 특징 벡터 사용
+                        bbox_info
+                    )
+                    
+                    # 로컬-전역 ID 매핑 저장
+                    local_to_global_map[local_id] = global_id
+                    
+                    xmin, ymin, xmax, ymax = map(int, t.tlbr)
+                    point_x = (xmin + xmax) / 2
+                    point_y = ymin
+                    
+                    detection_data = {
+                        "camera_id": camera_id,
+                        "local_track_id": int(local_id),
+                        "global_track_id": int(global_id),  # 전역 ID 추가
+                        "bbox_xyxy": [point_x, point_y],
+                        "is_new_global": is_new
+                    }
+                    frame_detections_json.append(detection_data)
+
+                    # 화면에 전역 ID 표시
+                    cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                    cv2.putText(frame, f'G:{global_id} L:{local_id}', 
+                               (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+                if frame_detections_json:
+                    print(f"--- Camera {camera_id} ({video_path}) ---")
+                    print(json.dumps(frame_detections_json, indent=2))
+
+                frame_queue.put((video_path, frame))
+                
+            except Exception as e:
+                print(f"Error processing frame {frame_count} in {video_path}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+        # 추적 종료된 ID들 정리
+        for local_id in local_to_global_map:
+            reid_manager.remove_track(camera_id, local_id)
+        
+        cap.release()
+        print(f"Tracking thread for {video_path} finished normally")
+        frame_queue.put((video_path, None))
+        
+    except Exception as e:
+        print(f"Critical error in tracking thread for {video_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        frame_queue.put((video_path, None))
 
 def main(args):
     reid_extractor = FeatureExtractor(
@@ -449,12 +521,15 @@ def main(args):
     latest_frames = {}
     active_videos = set(args.videos)
 
+    print(f"Started {len(threads)} tracking threads")
+    
     while active_videos:
         try:
             # 큐에서 프레임 가져오기 (타임아웃을 사용하여 GUI가 멈추지 않도록 함)
             video_path, frame = frame_queue.get(timeout=0.1)
 
             if frame is None:  # 스레드 종료 신호
+                print(f"Thread for {video_path} finished")
                 active_videos.discard(video_path)
                 if video_path in latest_frames:
                     del latest_frames[video_path]
@@ -466,26 +541,40 @@ def main(args):
         except queue.Empty:
             # 큐가 비어있으면 현재 프레임들을 다시 그림
             pass
+        except Exception as e:
+            print(f"Error in main loop: {e}")
+            import traceback
+            traceback.print_exc()
 
         # 모든 활성 비디오의 최신 프레임을 화면에 표시
         for path, f in latest_frames.items():
-            cv2.imshow(f"Tracking - {path}", f)
+            try:
+                cv2.imshow(f"Tracking - {path}", f)
+            except Exception as e:
+                print(f"Error displaying {path}: {e}")
 
         # 'q'를 누르면 모든 스레드에 종료 신호를 보내고 루프 탈출
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("User requested exit")
             stop_event.set()
             break
     
+    print("Waiting for threads to finish...")
     # 모든 스레드가 정상적으로 종료될 때까지 대기
-    for thread in threads:
-        thread.join()
+    for i, thread in enumerate(threads):
+        print(f"Waiting for thread {i+1}/{len(threads)} to finish...")
+        thread.join(timeout=5.0)  # 5초 타임아웃
+        if thread.is_alive():
+            print(f"Warning: Thread {i+1} did not finish within timeout")
+    
+    print("All threads finished")
 
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack and Re-ID for Multi-Video Tracking")
+    parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack for Multi-Video Tracking (IOU only, Global Re-ID)")
     parser.add_argument('--videos', nargs='+', type=str, default=["test_video/KSEB03.mp4","test_video/KSEB02.mp4"], help='List of video file paths.')
-    parser.add_argument('--yolo_model', type=str, default="models/weights/yolo11n.pt", help='Path to the YOLOv11 model file.')
+    parser.add_argument('--yolo_model', type=str, default="models/weights/yolo11m.pt", help='Path to the YOLOv11 model file.')
     parser.add_argument('--reid_model', type=str, default="", help='Path to the Re-ID model weights. Leave empty to download pretrained.')
     
     cli_args = parser.parse_args()
