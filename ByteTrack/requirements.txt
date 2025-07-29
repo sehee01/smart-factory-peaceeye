@@ -15,6 +15,9 @@ lap
 motmetrics
 filterpy
 h5py
+cython-bbox
+ultralytics
+scipy
 
 # verified versions
 onnx==1.15.0
