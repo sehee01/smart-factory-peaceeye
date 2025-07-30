@@ -14,7 +14,11 @@ from scipy.spatial.distance import cdist
 try:
     # ByteTrack, deep-person-reid가 현재 프로젝트 폴더 내에 있다고 가정
     sys.path.append('ByteTrack')
+<<<<<<< HEAD
     sys.path.append('deep-person-reid-master')
+=======
+    sys.path.append('deep-person-reid')
+>>>>>>> origin/sm
     from yolox.tracker.byte_tracker import BYTETracker, STrack as OriginalSTrack, TrackState
     from yolox.tracker.kalman_filter import KalmanFilter
     from yolox.tracker.matching import iou_distance, linear_assignment
