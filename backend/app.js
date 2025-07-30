@@ -1,4 +1,3 @@
-// backend/app.js
 const express = require("express");
 const path = require("path");
 const app = express();
@@ -16,16 +15,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// DB 연결
-dbConnect();
+// SQLite 초기화 추가
+require("./config/initDB"); // users 테이블 초기화
 
-// ✅ 여기 중요! 모든 로그인/회원가입 요청은 /api로 시작되도록 함
+// 로그인/회원가입 라우터 연결 (SQLite 기반 컨트롤러를 내부에서 사용)
 app.use("/", require("./routes/loginRoutes"));
 
-// ✅ React 빌드 결과물 정적 파일로 서빙
+// React 빌드 결과물 정적 파일로 서빙
 app.use(express.static(path.join(__dirname, "frontend/build")));  // client 폴더에 React 있는 경우
 
-// ✅ 모든 GET 요청은 React index.html 반환 (정규식 사용)
+// 모든 GET 요청은 React index.html 반환 (정규식 사용)
 app.get(/^\/(?!api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
 });
