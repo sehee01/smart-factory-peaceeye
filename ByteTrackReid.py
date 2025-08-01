@@ -344,7 +344,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack and Re-ID for Multi-Video Tracking")
-    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/test01.mp4","test_video/0_te2.mp4"], help='List of video file paths.')
+    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/KSEB02.mp4","test_video/KSEB03.mp4"], help='List of video file paths.')
     parser.add_argument('--yolo_model', type=str, default="models/weights/best.pt", help='Path to the YOLOv11 model file.')
     parser.add_argument('--reid_model', type=str, default="", help='Path to the Re-ID model weights. Leave empty to download pretrained.')
     

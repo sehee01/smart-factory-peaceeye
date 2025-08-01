@@ -34,10 +34,10 @@ if not hasattr(np, 'float'):
     np.float = float
 
 
-# --- 글로벌 ReID를 사용하는 BYTETracker ---
+# --- 로컬컬 ReID를 사용하는 BYTETracker ---
 class BYTETrackerWithReID(BYTETracker):
     """
-    글로벌 ReID를 사용하여 여러 카메라에서 동일한 객체를 식별하는 ByteTrack
+    로컬컬 ReID를 사용하여 여러 카메라에서 동일한 객체를 식별하는 ByteTrack
     """
     def __init__(self, args, frame_rate=30, camera_id=0):
         super().__init__(args, frame_rate)
