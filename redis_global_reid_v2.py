@@ -341,7 +341,7 @@ class RedisGlobalReIDManagerV2:
         
         # TTL 결정: 활성 객체는 TTL 없음, 사라진 객체만 TTL
         if track_info.get('is_disappeared', False):
-            # 사라진 객체: TTL 적용 (5분)
+            # 사라진 객체: TTL 적용 (프레임 단위위)
             ttl = self.feature_ttl
             self.redis_client.setex(data_key, ttl, pickle.dumps(track_info))
             track_key = self.track_key_pattern.format(track_id)

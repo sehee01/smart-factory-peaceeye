@@ -42,7 +42,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
     model = YOLO(yolo_model_path, task="detect")
     classNames = model.names
 
-    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=150, mot20=False)
+    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=300, mot20=False)
     tracker = BYTETrackerWithReID(tracker_args, frame_rate=30, camera_id=camera_id)
 
     cap = cv2.VideoCapture(video_path)
@@ -164,7 +164,7 @@ def main(args):
     # Redis Global ReID 매니저 V2 초기화 (모든 스레드가 공유)
     global_reid_manager = RedisGlobalReIDManagerV2(
         similarity_threshold=0.7,
-        feature_ttl=300,
+        feature_ttl=3000,
         max_features_per_camera=10,
         redis_host='localhost',
         redis_port=6379
