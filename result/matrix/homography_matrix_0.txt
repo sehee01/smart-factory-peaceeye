@@ -1,0 +1,17 @@
+=== Homography Calibration Report ===
+Camera ID: 0
+Generated At: 2025-07-18 15:26:47
+Total Correspondence Points: 4
+
+Pixel -> Real World Coordinate Mapping:
+--------------------------------------------------
+  Point 1: Pixel(1373, 205) -> Real(70.0, 70.0)
+  Point 2: Pixel(1528, 230) -> Real(80.0, 70.0)
+  Point 3: Pixel(1332, 842) -> Real(80.0, 20.0)
+  Point 4: Pixel(1620, 846) -> Real(90.0, 30.0)
+
+Homography Matrix:
+------------------------------
+  [-0.348406, -0.237659, 341.082155]
+  [-0.212830, 0.151487, 75.161837]
+  [-0.002317, -0.002318, 1.000000]
