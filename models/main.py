@@ -1,95 +1,72 @@
-import os
 import asyncio
-from dotenv import load_dotenv
-from pymongo import MongoClient
 from datetime import datetime, timezone
 import json
-import certifi
-import websockets
+import requests
 
-# .env 파일 로딩
-load_dotenv()
-
-# 환경 변수에서 URI 불러오기
-mongo_uri = os.environ.get("MONGO_URI")
-client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
-
-# DB 선택
-db = client["peaceeye"]
-collection = db["detections"]
-
-# 접속한 WebSocket 클라이언트 저장용
-connected_clients = set()
+# Node.js 서버의 POST 수신 URL
+NODE_SERVER_URL = "http://localhost:5000/inference"
 
 # 예시 추론 함수 (실제 모델로 교체 가능)
 def run_detection():
+    now = datetime.now(timezone.utc).isoformat()
+
+    workers = [
+        {"worker_id": "worker_001", "x": 1, "y": 3, "status": "normal", "zone_id": "Z01", "product_count": 2, "timestamp": now},
+        {"worker_id": "worker_002", "x": 15, "y": 35, "status": "warning", "zone_id": "Z01", "product_count": 3, "timestamp": now},
+        {"worker_id": "worker_003", "x": 20, "y": 10, "status": "roi_violation", "zone_id": "Z02", "product_count": 1, "timestamp": now}
+    ]
+
+    alerts = []
+    for w in workers:
+        if w["status"] == "warning":
+            alerts.append({"worker_id": w["worker_id"], "zone_id": w["zone_id"], "type": "ppe_violation", "timestamp": now})
+        elif w["status"] == "roi_violation":
+            alerts.append({"worker_id": w["worker_id"], "zone_id": w["zone_id"], "type": "roi_violation", "timestamp": now})
+
+    zone_stats = {}
+    for w in workers:
+        zid = w["zone_id"]
+        zone_stats.setdefault(zid, {"count": 0})
+        zone_stats[zid]["count"] += w.get("product_count", 0)
+
+    zones = []
+    for zid, stat in zone_stats.items():
+        total = stat["count"]
+        avg = 480 / total if total > 0 else None
+        zones.append({
+            "zone_id": zid,
+            "zone_name": f"Zone {zid}",
+            "zone_type": "작업구역",
+            "active_workers": sum(1 for w in workers if w["zone_id"] == zid),
+            "active_tasks": "",
+            "avg_cycle_time_min": avg,
+            "ppe_violations": sum(1 for w in workers if w["zone_id"] == zid and w["status"] == "warning"),
+            "hazard_dwell_count": sum(1 for w in workers if w["zone_id"] == zid and w["status"] == "roi_violation"),
+            "recent_alerts": ""
+        })
+
     return {
-        "workers": [
-            {"worker_id": "worker_001", "x": 100, "y": 100, "status": "normal"},
-            {"worker_id": "worker_002", "x": 30, "y": 15, "status": "warning"},
-        ]
+        "timestamp": now,
+        "workers": workers,
+        "alerts": alerts,
+        "zones": zones
     }
-
-# WebSocket 클라이언트 연결 핸들러
-async def websocket_handler(websocket):
-    print("[INFO] Unity client connected.")
-    connected_clients.add(websocket)
-
-    try:
-        while True:
-            try:
-                message = await asyncio.wait_for(websocket.recv(), timeout=10.0)
-                print(f"[INFO] Message from Unity: {message}")
-                # 메시지를 받은 후 원하는 동작 트리거 가능 (예: 감지 루프 시작 등)
-            except asyncio.TimeoutError:
-                continue
-            except websockets.ConnectionClosed:
-                print("[INFO] Unity client disconnected.")
-                break
-    finally:
-        connected_clients.remove(websocket)
 
 # 주기적 감지 및 전송 루프
 async def detection_loop():
-    print("[INFO] Starting AI detection loop...")
-
+    print("[INFO] AI detection started")
     while True:
         result = run_detection()
-        # MongoDB에는 timestamp 포함해서 저장
-        db_result = {
-            "timestamp": datetime.now(timezone.utc),
-            **result
-        }
-        collection.insert_one(db_result)
-        print(f"[INFO] Saved detection at {db_result['timestamp']}")
-
-        # WebSocket 클라이언트에게 전송
-        if connected_clients:
-            message = json.dumps(result, default=str)
-            disconnected = set()
-
-            for client in connected_clients:
-                try:
-                    await client.send(message)
-                except Exception as e:
-                    print(f"[ERROR] Failed to send to client: {e}")
-                    disconnected.add(client)
-
-            connected_clients.difference_update(disconnected)
+        try:
+            res = requests.post(NODE_SERVER_URL, json=result, timeout=2)
+            print(f"[POST] Sent to Node.js: {res.status_code}")
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to send to Node.js: {e}")
 
         await asyncio.sleep(0.5)
 
-# 메인 실행
-async def main():
-    # WebSocket 서버 시작
-    server = await websockets.serve(websocket_handler, "0.0.0.0", 8000)
-    print("[INFO] WebSocket server running at ws://localhost:8000")
-
-    # 감지 루프 실행
-    await detection_loop()
-
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(detection_loop())
     except Exception as e:
         print(f"[ERROR] {e}")
