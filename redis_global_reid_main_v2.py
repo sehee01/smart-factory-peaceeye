@@ -104,7 +104,43 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
                 bboxes.append([x1, y1, x2, y2])
             
             if len(crops) > 0:
-                features = reid_extractor(crops).cpu().numpy()
+                processed_crops = []
+                for crop in crops:
+                    # 패딩을 추가한 resize 함수
+                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
+                        """
+                        이미지를 패딩을 추가하여 target_size로 resize
+                        """
+                        h, w = image.shape[:2]
+                        target_w, target_h = target_size
+                        
+                        # 비율 계산
+                        scale = min(target_w / w, target_h / h)
+                        new_w, new_h = int(w * scale), int(h * scale)
+                        
+                        # resize
+                        resized = cv2.resize(image, (new_w, new_h))
+                        
+                        # 패딩 계산
+                        pad_w = (target_w - new_w) // 2
+                        pad_h = (target_h - new_h) // 2
+                        
+                        # 패딩이 홀수인 경우 처리
+                        pad_w_extra = (target_w - new_w) % 2
+                        pad_h_extra = (target_h - new_h) % 2
+                        
+                        # 패딩된 이미지 생성
+                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
+                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
+                        
+                        return padded
+                    
+                    # 패딩을 추가한 resize 적용
+                    resized_crop = resize_with_padding(crop, (128, 256))
+                    normalized_crop = resized_crop.astype(np.float32) / 255.0
+                    processed_crops.append(normalized_crop)
+
+                features = reid_extractor(processed_crops).cpu().numpy()
                 matched_tracks = set()
                 
                 for i, track in enumerate(online_targets):
@@ -131,10 +167,10 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
             global_id = tracker.global_id_mapping.get(t.track_id, t.track_id)
             
             detection_data = {
-                "camera_id": int(camera_id),
-                "track_id": int(global_id),
-                "bbox_xyxy": [point_x, point_y],
-                "has_reid_feature": t.smooth_feat is not None if hasattr(t, 'smooth_feat') else False
+                "cameraID": int(camera_id),
+                "workerID": int(global_id),
+                "position_X": point_x,
+                "position_Y": point_y
             }
             frame_detections_json.append(detection_data)
 
@@ -163,11 +199,12 @@ def main(args):
     
     # Redis Global ReID 매니저 V2 초기화 (모든 스레드가 공유)
     global_reid_manager = RedisGlobalReIDManagerV2(
-        similarity_threshold=0.7,
-        feature_ttl=3000,
+        similarity_threshold=0.5,
+        feature_ttl=3000,  # 100초
         max_features_per_camera=10,
         redis_host='localhost',
-        redis_port=6379
+        redis_port=6379,
+        frame_rate=30  # 30fps
     )
     
     frame_queue = queue.Queue()

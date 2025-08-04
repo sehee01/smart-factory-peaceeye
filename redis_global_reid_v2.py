@@ -11,21 +11,31 @@ class RedisGlobalReIDManagerV2:
     카메라별 우선순위 매칭과 다중 카메라 정보 통합을 지원하는 Redis Global ReID 매니저
     사라지는 객체 감지 및 TTL 제외 관리 포함
     """
-    def __init__(self, similarity_threshold=0.7, feature_ttl=300, max_features_per_camera=10, redis_host='localhost', redis_port=6379):
+    def __init__(self, similarity_threshold=0.7, feature_ttl=300, max_features_per_camera=10, redis_host='localhost', redis_port=6379, frame_rate=30):
         self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=False)
         self.similarity_threshold = similarity_threshold
-        self.feature_ttl = feature_ttl
+        self.feature_ttl = feature_ttl  # 초 단위
         self.max_features_per_camera = max_features_per_camera
+        self.frame_rate = frame_rate
         self.lock = threading.Lock()
         
         # Redis 키 패턴 (통합)
         self.track_key_pattern = "global_track:{}"
         self.track_data_key_pattern = "global_track_data:{}"
         self.track_history_key_pattern = "track_history:{}:{}"  # camera_id:track_id
+        
+        # 전역 프레임 카운터 (모든 카메라가 공유)
+        self.global_frame_counter = 0
+        
+        # TTL을 프레임 단위로 변환
+        self.ttl_frames = self.feature_ttl * self.frame_rate
     
     def update_frame(self, frame_id):
         """현재 프레임 업데이트 및 만료된 트랙 정리 (통합된 구조)"""
         with self.lock:
+            # 전역 프레임 카운터 업데이트 (가장 큰 frame_id로 설정)
+            self.global_frame_counter = max(self.global_frame_counter, frame_id)
+            
             track_keys = self.redis_client.keys("global_track:*")
             
             for track_key in track_keys:
@@ -42,18 +52,18 @@ class RedisGlobalReIDManagerV2:
                     for camera_data in track_info['cameras'].values():
                         max_last_seen = max(max_last_seen, camera_data.get('last_seen', 0))
                     
-                    # TTL 결정 (사라진 객체는 기본 TTL)
+                    # TTL 결정 (시간 기반)
                     is_disappeared = track_info.get('is_disappeared', False)
                     if is_disappeared:
-                        ttl = self.feature_ttl  # 사라진 객체는 기본 TTL (5분)
+                        ttl_frames = self.ttl_frames  # 사라진 객체: 기본 TTL (예: 5분 = 9000프레임)
                     else:
-                        ttl = self.feature_ttl  # 일반 객체는 기본 TTL (5분)
+                        ttl_frames = self.ttl_frames * 2  # 활성 객체: 2배 TTL (예: 10분 = 18000프레임)
                     
-                    # TTL이 만료된 트랙 제거
-                    if frame_id - max_last_seen > ttl:
+                    # TTL이 만료된 트랙 제거 (시간 기반)
+                    if self.global_frame_counter - max_last_seen > ttl_frames:
                         self._remove_track(track_id)
                         status = "disappeared" if is_disappeared else "normal"
-                        print(f"Global ReID: Expired {status} track {track_id}")
+                        print(f"Global ReID: Expired {status} track {track_id} (global_frame: {self.global_frame_counter}, last_seen: {max_last_seen}, diff: {self.global_frame_counter - max_last_seen})")
     
     def _remove_track(self, track_id):
         """트랙 완전 제거 (통합된 구조)"""
@@ -134,6 +144,9 @@ class RedisGlobalReIDManagerV2:
             return None
         
         with self.lock:
+            # 전역 프레임 카운터 업데이트
+            self.global_frame_counter = max(self.global_frame_counter, frame_id)
+            
             # 1단계: 사라지는 객체 감지
             previous_bbox_area = self._get_previous_bbox_area(camera_id, frame_id)
             is_disappearing = self.detect_disappearing_object(bbox, frame_shape, previous_bbox_area)
@@ -215,7 +228,7 @@ class RedisGlobalReIDManagerV2:
                         distance = np.sqrt((current_center[0] - last_center[0])**2 + (current_center[1] - last_center[1])**2)
                         
                         # 거리 기반 위치 점수 계산 (가까울수록 높은 점수)
-                        max_distance = 200
+                        max_distance = 100
                         if distance <= max_distance:
                             location_score = 1.0 - (distance / max_distance)  # 0~1 사이 점수
                         else:
@@ -328,10 +341,10 @@ class RedisGlobalReIDManagerV2:
             if len(track_info['cameras'][camera_id_str]['features']) > self.max_features_per_camera:
                 track_info['cameras'][camera_id_str]['features'] = track_info['cameras'][camera_id_str]['features'][-self.max_features_per_camera:]
         
-        # 메타데이터 업데이트
-        track_info['cameras'][camera_id_str]['last_seen'] = frame_id
+        # 메타데이터 업데이트 (전역 프레임 카운터 사용)
+        track_info['cameras'][camera_id_str]['last_seen'] = self.global_frame_counter
         track_info['cameras'][camera_id_str]['last_bbox'] = bbox
-        track_info['last_activity'] = frame_id
+        track_info['last_activity'] = self.global_frame_counter
         
         # 사라진 객체가 다시 나타난 경우 상태 복구
         if track_info.get('is_disappeared', False) and features is not None:
@@ -357,18 +370,18 @@ class RedisGlobalReIDManagerV2:
         track_key = self.track_key_pattern.format(track_id)
         data_key = self.track_data_key_pattern.format(track_id)
         
-        # 트랙 데이터 생성
+        # 트랙 데이터 생성 (전역 프레임 카운터 사용)
         track_info = {
             'cameras': {
                 str(camera_id): {
                     'features': [features] if not is_disappeared else [],
-                    'last_seen': frame_id,
+                    'last_seen': self.global_frame_counter,
                     'last_bbox': bbox
                 }
             },
             'is_disappeared': is_disappeared,
-            'disappeared_since': frame_id if is_disappeared else None,
-            'last_activity': frame_id
+            'disappeared_since': self.global_frame_counter if is_disappeared else None,
+            'last_activity': self.global_frame_counter
         }
         
         # TTL 결정: 활성 객체는 TTL 없음, 사라진 객체만 TTL

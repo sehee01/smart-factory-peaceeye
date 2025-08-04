@@ -218,7 +218,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="YOLOv8 with ByteTrack and Redis Global Re-ID V2 for Multi-Video Tracking")
-    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/KSEB02.mp4","test_video/KSEB03.mp4"], help='List of video file paths.')
+    parser.add_argument('--videos', nargs='+', type=str, default=["test_video/globaltest03.mp4","test_video/globaltest04.mp4"], help='List of video file paths.')
     parser.add_argument('--yolo_model', type=str, default="models/weights/bestcctv.pt", help='Path to the YOLOv11 model file.')
     parser.add_argument('--redis_host', type=str, default="localhost", help='Redis server host.')
     parser.add_argument('--redis_port', type=int, default=6379, help='Redis server port.')
