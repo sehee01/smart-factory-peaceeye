@@ -25,6 +25,9 @@ app.use("/", require("./routes/loginRoutes"));
 app.use("/zones", require("./routes/zoneRoutes"));
 app.use("/alerts", require("./routes/alertRoutes"));
 app.use("/team", require("./routes/teamRoutes"));
+app.use("/workers", require("./routes/workerRoutes"));
+app.use('/api', require('./routes/taskRoutes'));
+app.use("/dashboared/summary", require("./routes/workerRoutes"));
 
 // workers 위치/상태 정보
 app.post("/workers", (req, res) => {
