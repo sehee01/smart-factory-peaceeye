@@ -1,6 +1,6 @@
 import numpy as np
 
-def transform_point(point, homography_matrix):
+def transform_point(pointx,pointz, homography_matrix):
     """
     제공된 호모그래피 행렬을 사용하여 이미지 좌표의 2D 점을
     실제 세계 좌표로 변환합니다.
@@ -15,7 +15,7 @@ def transform_point(point, homography_matrix):
                변환이 불가능한 경우 None을 반환합니다.
     """
     # 점을 동차 좌표(x, y, 1)로 변환합니다.
-    point_homogeneous = np.array([point[0], point[1], 1], dtype="float32")
+    point_homogeneous = np.array([pointx, pointz, 1], dtype="float32")
 
     # 행렬 곱셈을 사용하여 호모그래피 변환을 적용합니다.
     transformed_point_homogeneous = homography_matrix @ point_homogeneous
@@ -29,7 +29,7 @@ def transform_point(point, homography_matrix):
     transformed_x = transformed_point_homogeneous[0] / w
     transformed_y = transformed_point_homogeneous[1] / w
 
-    return (transformed_x, transformed_y)
+    return transformed_x, transformed_y
 
 """
 --- 사용 예시 ---
