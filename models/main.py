@@ -1,15 +1,20 @@
 import asyncio
 from datetime import datetime, timezone
 import requests
+import json
 import sys
 import os
 import torch
+import time
 
-# 상위 디렉토리 경로 추가
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ByteTrack'))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'deep-person-reid-master'))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models', 'mapping'))  # point_transformer 경로 추가
+# 프로젝트 루트 경로 설정
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.extend([
+    project_root,
+    os.path.join(project_root, 'ByteTrack'),
+    os.path.join(project_root, 'deep-person-reid-master'),
+    os.path.join(project_root, 'models', 'mapping')  # point_transformer 경로
+])
 
 # Node.js 서버 URL
 WORKER_URL = "http://localhost:5000/workers"
@@ -17,10 +22,13 @@ ZONE_URL = "http://localhost:5000/zones"
 VIOLATION_URL = "http://localhost:5000/violations"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 # Redis Global ReID 모듈 import
 try:
-    from redis_global_reid_main_v2 import run_tracking_realtime
+    from redis_global_reid_main_v2 import run_tracking_realtime, FeatureExtractor, RedisGlobalReIDManagerV2
     import argparse
 except ImportError as e:
     print(f"Redis Global ReID 모듈 import 실패: {e}")
@@ -41,7 +49,6 @@ args = parser.parse_args([])  # 빈 리스트로 기본값 사용
 
 # ReID 모델 초기화 (한 번만)
 try:
-    from redis_global_reid_main_v2 import FeatureExtractor, RedisGlobalReIDManagerV2
     reid_extractor = FeatureExtractor(
         model_name='osnet_ibn_x1_0',
         model_path=None,
@@ -75,11 +82,15 @@ except Exception as e:
     print(f"ReID 모델 초기화 실패: {e}")
     sys.exit(1)
 
+<<<<<<< HEAD
+>>>>>>> origin/main
+=======
 >>>>>>> origin/main
 def run_detection():
     """실시간 ReID 추적에서 현재 프레임 결과를 반환"""
+    start_time = time.time()  # 프레임 처리 시작 시간
     now = datetime.now(timezone.utc).isoformat()
-    
+
     try:
         # 모든 카메라의 현재 프레임 결과 수집
         all_detections = []
@@ -95,27 +106,51 @@ def run_detection():
         workers = []
         for detection in all_detections:
             worker = {
-                "worker_id": f"worker_{detection['workerID']:03d}",
+                "worker_id": f"W{detection['workerID']:03d}",
                 "x": float(detection['position_X']),  # float64 유지
                 "y": float(detection['position_Y']),  # float64 유지
-                "status": "normal",
                 "zone_id": f"Z{detection['cameraID']:02d}",
                 "product_count": 1,
                 "timestamp": now,
-                "frame_id": detection.get('frame_id', 0)
             }
             workers.append(worker)
-        
-        # 알림 생성 (현재는 기본값)
-        alerts = []
-        
-        # 구역 통계 계산
+
+        # 위반 정보 (PPE, ROI)
+        violations = [
+            {
+                "worker_id": "W001",
+                "zone_id": "Z01",
+                "timestamp": now,
+                "violations": {
+                    "ppe": ["helmet_missing", "vest_missing"],
+                    "roi": []
+                }
+            },
+            {
+                "worker_id": "W003",
+                "zone_id": "Z02",
+                "timestamp": now,
+                "violations": {
+                    "ppe": [],
+                    "roi": ["restricted_area_1"]
+                }
+            }
+        ]
+
+        # zone 통계
         zone_stats = {}
         for w in workers:
             zid = w["zone_id"]
-            zone_stats.setdefault(zid, {"count": 0})
-            zone_stats[zid]["count"] += w.get("product_count", 0)
+            zone_stats.setdefault(zid, {
+                "zone_name": f"Zone {zid}",
+                "zone_type": "작업구역",
+                "total_product": 0,
+                "active_workers": 0
+            })
+            zone_stats[zid]["total_product"] += w.get("product_count", 0)
+            zone_stats[zid]["active_workers"] += 1
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     # 작업자 위치/생산량 정보
     workers = [
@@ -194,6 +229,44 @@ def run_detection():
         "violations": violations,
         "zones": zones
     }
+=======
+        zones = []
+        for zid, stat in zone_stats.items():
+            total = stat["total_product"]
+            avg = 480 / total if total > 0 else None
+            zones.append({
+                "zone_id": zid,
+                "zone_name": stat["zone_name"],
+                "zone_type": stat["zone_type"],
+                "timestamp": now,
+                "active_workers": stat["active_workers"],
+                "active_tasks": "",
+                "avg_cycle_time_min": avg,
+                "ppe_violations": sum(
+                    1 for v in violations if v["zone_id"] == zid and v["violations"]["ppe"]
+                ),
+                "hazard_dwell_count": sum(
+                    1 for v in violations if v["zone_id"] == zid and v["violations"]["roi"]
+                ),
+                "recent_alerts": ""
+            })
+
+        return {
+            "workers": workers,
+            "violations": violations,
+            "zones": zones
+        }
+    
+    except Exception as e:
+        processing_time = time.time() - start_time  # 오류 시에도 처리 시간 계산
+        print(f"ReID 추적 실행 중 오류: {e}")
+        # 오류 발생 시 기본 데이터 반환
+        return {
+            "workers": [],
+            "violations": [],
+            "zones": [],
+        }
+>>>>>>> origin/main
 
 # 주기적 전송 루프
 async def detection_loop():
@@ -221,6 +294,7 @@ async def detection_loop():
             print(f"[ERROR] Failed to send: {e}")
 
         await asyncio.sleep(1.0)
+<<<<<<< HEAD
 =======
         zones = []
         for zid, stat in zone_stats.items():
@@ -272,6 +346,8 @@ async def detection_loop():
             print(f"[ERROR] Detection error: {e}")
 
         await asyncio.sleep(0.033)  # 0.033초 간격 (약 30fps)
+>>>>>>> origin/main
+=======
 >>>>>>> origin/main
 
 if __name__ == "__main__":
