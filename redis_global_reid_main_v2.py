@@ -8,7 +8,6 @@ import argparse
 import queue
 from ultralytics import YOLO
 from scipy.spatial.distance import cdist
-from point_transformer import transform_point
 
 # 경로 설정
 try:
@@ -19,6 +18,7 @@ try:
     from yolox.tracker.matching import iou_distance, linear_assignment
     from torchreid.utils.feature_extractor import FeatureExtractor
     from redis_global_reid_v2 import RedisGlobalReIDManagerV2
+    from point_transformer import transform_point
 except ImportError as e:
     print(f"필수 라이브러리 로드 실패: {e}")
     sys.exit(1)
@@ -58,10 +58,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
             print(f"[{video_path}] Video ended")
             break  # 영상이 끝나면 종료
         
-        # 최대 프레임 수 제한
-        if max_frames and frame_id >= max_frames:
-            print(f"[{video_path}] Reached max frames ({max_frames})")
-            break
+        # 프레임 제한 제거 - 전체 영상 처리
 
         frame_id += 1
         
@@ -112,38 +109,8 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
             if len(crops) > 0:
                 processed_crops = []
                 for crop in crops:
-                    # 패딩을 추가한 resize 함수
-                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
-                        """
-                        이미지를 패딩을 추가하여 target_size로 resize
-                        """
-                        h, w = image.shape[:2]
-                        target_w, target_h = target_size
-                        
-                        # 비율 계산
-                        scale = min(target_w / w, target_h / h)
-                        new_w, new_h = int(w * scale), int(h * scale)
-                        
-                        # resize
-                        resized = cv2.resize(image, (new_w, new_h))
-                        
-                        # 패딩 계산
-                        pad_w = (target_w - new_w) // 2
-                        pad_h = (target_h - new_h) // 2
-                        
-                        # 패딩이 홀수인 경우 처리
-                        pad_w_extra = (target_w - new_w) % 2
-                        pad_h_extra = (target_h - new_h) % 2
-                        
-                        # 패딩된 이미지 생성
-                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-                        
-                        return padded
-                    
-                    # 패딩을 추가한 resize 적용
-                    resized_crop = resize_with_padding(crop, (128, 256))
-                    normalized_crop = resized_crop.astype(np.float32) / 255.0
+                    # 원본 크롭 이미지를 직접 사용 (패딩 resize 제거)
+                    normalized_crop = crop.astype(np.float32) / 255.0
                     processed_crops.append(normalized_crop)
 
                 features = reid_extractor(processed_crops).cpu().numpy()
@@ -267,38 +234,8 @@ def run_tracking_realtime(video_path, yolo_model_path, reid_extractor, camera_id
             if len(crops) > 0:
                 processed_crops = []
                 for crop in crops:
-                    # 패딩을 추가한 resize 함수
-                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
-                        """
-                        이미지를 패딩을 추가하여 target_size로 resize
-                        """
-                        h, w = image.shape[:2]
-                        target_w, target_h = target_size
-                        
-                        # 비율 계산
-                        scale = min(target_w / w, target_h / h)
-                        new_w, new_h = int(w * scale), int(h * scale)
-                        
-                        # resize
-                        resized = cv2.resize(image, (new_w, new_h))
-                        
-                        # 패딩 계산
-                        pad_w = (target_w - new_w) // 2
-                        pad_h = (target_h - new_h) // 2
-                        
-                        # 패딩이 홀수인 경우 처리
-                        pad_w_extra = (target_w - new_w) % 2
-                        pad_h_extra = (target_h - new_h) % 2
-                        
-                        # 패딩된 이미지 생성
-                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-                        
-                        return padded
-                    
-                    # 패딩을 추가한 resize 적용
-                    resized_crop = resize_with_padding(crop, (128, 256))
-                    normalized_crop = resized_crop.astype(np.float32) / 255.0
+                    # 원본 크롭 이미지를 직접 사용 (패딩 resize 제거)
+                    normalized_crop = crop.astype(np.float32) / 255.0
                     processed_crops.append(normalized_crop)
 
                 features = reid_extractor(processed_crops).cpu().numpy()
@@ -377,7 +314,7 @@ def main(args):
     for video_path in args.videos:
         thread = threading.Thread(
             target=run_tracking, 
-            args=(video_path, args.yolo_model, reid_extractor, frame_queue, stop_event, args.videos.index(video_path), global_reid_manager, None),  # 모든 프레임 처리
+            args=(video_path, args.yolo_model, reid_extractor, frame_queue, stop_event, args.videos.index(video_path), global_reid_manager),  # 전체 영상 처리
             daemon=True
         )
         threads.append(thread)
@@ -390,11 +327,10 @@ def main(args):
     # JSON 데이터 수집용 딕셔너리
     latest_detections = {}
     
-    # 매 프레임마다 실시간 처리
+    # 매 프레임마다 실시간 처리 - 전체 영상 처리
     frame_count = 0
-    max_frames = 300  # 최대 300프레임 (약 10초) 처리
     
-    while active_videos and frame_count < max_frames:
+    while active_videos:
         try:
             video_path, frame, detections = frame_queue.get(timeout=0.1)
 

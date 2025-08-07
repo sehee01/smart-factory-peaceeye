@@ -29,7 +29,7 @@ class BYTETrackerWithReID(BYTETracker):
     def __init__(self, args, frame_rate=30, camera_id=0):
         super().__init__(args, frame_rate)
         self.camera_id = camera_id
-        self.reid_thresh = 0.6
+        self.reid_thresh = 0.7
         self.global_id_mapping = {}  # {local_track_id: global_id}
 
     def update(self, dets, img_info, img_size, reid_extractor, global_reid_manager, frame_id):
@@ -106,38 +106,8 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
             if len(crops) > 0:
                 processed_crops = []
                 for crop in crops:
-                    # 패딩을 추가한 resize 함수
-                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
-                        """
-                        이미지를 패딩을 추가하여 target_size로 resize
-                        """
-                        h, w = image.shape[:2]
-                        target_w, target_h = target_size
-                        
-                        # 비율 계산
-                        scale = min(target_w / w, target_h / h)
-                        new_w, new_h = int(w * scale), int(h * scale)
-                        
-                        # resize
-                        resized = cv2.resize(image, (new_w, new_h))
-                        
-                        # 패딩 계산
-                        pad_w = (target_w - new_w) // 2
-                        pad_h = (target_h - new_h) // 2
-                        
-                        # 패딩이 홀수인 경우 처리
-                        pad_w_extra = (target_w - new_w) % 2
-                        pad_h_extra = (target_h - new_h) % 2
-                        
-                        # 패딩된 이미지 생성
-                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-                        
-                        return padded
-                    
-                    # 패딩을 추가한 resize 적용
-                    resized_crop = resize_with_padding(crop, (128, 256))
-                    normalized_crop = resized_crop.astype(np.float32) / 255.0
+                    # 원본 크롭 이미지를 직접 사용 (패딩 resize 제거)
+                    normalized_crop = crop.astype(np.float32) / 255.0
                     processed_crops.append(normalized_crop)
 
                 features = reid_extractor(processed_crops).cpu().numpy()
