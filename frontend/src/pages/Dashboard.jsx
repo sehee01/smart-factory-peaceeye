@@ -2,43 +2,90 @@ import React, { useState, useEffect } from 'react';
 import { Unity, useUnityContext } from 'react-unity-webgl';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+// 파일 경로: src/pages/Dashboard.jsx
+
+// 0. Unity 빌드 파일 경로 (public 폴더 기준)
+const unityBuildFolder = "/Build";
+const unityBuildJson = "Build.loader.js"; // 본인 파일명에 맞게 확인
 
 function Dashboard() {
   const [user, setUser] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
   const navigate = useNavigate();
 
-  // 로그인 상태 확인 (백엔드 쿠키 기반 JWT 인증)
-  useEffect(() => {
-    axios.get('http://localhost:5000/me', {
-      withCredentials: true
-    }).then(res => {
-      setUser(res.data.user); // 예: { id: 1, username: 'admin' }
-      console.log("로그인 사용자:", res.data.user.username);
-    }).catch(err => {
-      console.warn("인증 실패 또는 로그인 만료:", err.response?.data?.message);
-      navigate('/login'); // 로그인 페이지로 이동
-    });
-  }, [navigate]);
-
-  const { unityProvider } = useUnityContext({
-    loaderUrl: "/unity/Build/Build.loader.js",
+  // 1. react-unity-webgl 설정
+  const { unityProvider, isLoaded, loadingProgression } = useUnityContext({
+    //0. Unity 빌드 파일 경로 참고할 것
+    loaderUrl: `${unityBuildFolder}/${unityBuildJson}`,
     dataUrl: "/unity/Build/Build.data",
     frameworkUrl: "/unity/Build/Build.framework.js",
     codeUrl: "/unity/Build/Build.wasm",
   });
 
-  // 인증 확인되기 전에는 Unity 표시 X
+  // 2. 로그인 상태 확인 (백엔드 쿠키 기반 JWT 인증)
+  useEffect(() => {
+    axios.get('http://localhost:5000/me', {
+      withCredentials: true
+    }).then(res => {
+      setUser(res.data.user);
+      console.log("로그인 사용자:", res.data.user.username);
+    }).catch(err => {
+      console.warn("인증 실패 또는 로그인 만료:", err.response?.data?.message);
+      navigate('/login'); // 로그인 페이지로 이동 ('/' 혹은 '/login')
+    }).finally(() => {
+      setIsAuthenticating(false); // 인증 절차 완료
+    });
+  }, [navigate]);
+
+  // 3. Unity로부터 로그아웃 신호를 처리하는 함수
+  const handleLogoutFromUnity = async () => {
+    console.log("Unity로부터 로그아웃 신호를 받았습니다.");
+    try {
+      await axios.post("http://localhost:5000/logout", {}, {
+        withCredentials: true
+      });
+      alert("성공적으로 로그아웃되었습니다.");
+      navigate("/"); // 로그아웃 성공 시, 초기 페이지(로그인)로 이동
+    } catch (error) {
+      console.error("로그아웃 처리 중 오류 발생:", error);
+      alert("로그아웃에 실패했습니다. 관리자에게 문의하세요.");
+      navigate("/");
+    }
+  };
+
+  // 4. Unity가 호출할 함수를 전역(window)에 등록
+  useEffect(() => {
+    window.handleUnityLogout = handleLogoutFromUnity;
+    return () => {
+      delete window.handleUnityLogout;
+    };
+  }, []); // 이 useEffect는 처음 한 번만 실행되면 되므로 의존성 배열을 비워둡니다.
+
+  // 인증 확인 중일 때 로딩 메시지 표시
+  if (isAuthenticating) {
+    return <div style={{ textAlign: 'center', paddingTop: '20%' }}>인증 정보를 확인 중입니다...</div>;
+  }
+  // 인증 실패로 user가 없을 경우 렌더링하지 않음 (useEffect에서 이미 페이지 이동 처리)
   if (!user) return null;
 
+  // 5. 최종 렌더링
   return (
-    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden' }}>
+    <div className="unity-container" style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden' }}>
+      {/* Unity 로딩 오버레이 */}
+      {!isLoaded && (
+        <div className="loading-overlay" style={{ position: 'absolute', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.7)', color: 'white' }}>
+          <p>게임 로딩 중... {Math.round(loadingProgression * 100)}%</p>
+        </div>
+      )}
+      {/* Unity 게임 캔버스 */}
       <Unity
         unityProvider={unityProvider}
         style={{
           width: '100%',
           height: '100%',
           display: 'block',
-          background: '#000' // 옵션: 배경이 안 보이면 검정색
+          background: '#000', // 옵션: 배경이 안 보이면 검정색
+          visibility: isLoaded ? "visible" : "hidden"
         }}
       />
     </div>

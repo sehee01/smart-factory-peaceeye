@@ -62,8 +62,8 @@ public class WorkerInfoUI : MonoBehaviour
         positionText.text = $"현재 위치: ({x:F1}, {y:F1})";
 
         // 전경 카메라 켜기, 기본 카메라 끄기
-        if (overviewCamera != null) overviewCamera.gameObject.SetActive(true);
-        if (workerCamera != null) workerCamera.gameObject.SetActive(false);
+        if (overviewCamera != null) overviewCamera.gameObject.SetActive(false);
+        if (workerCamera != null) workerCamera.gameObject.SetActive(true);
     }
 
    // X 버튼 누르면 닫기 요청
