@@ -23,8 +23,10 @@ VIOLATION_URL = "http://localhost:5000/violations"
 
 # Redis Global ReID 모듈 import
 try:
-    from redis_global_reid_main_v2 import run_tracking_realtime, FeatureExtractor, RedisGlobalReIDManagerV2
+    from redis_global_reid_main_v2 import run_tracking, FeatureExtractor, RedisGlobalReIDManagerV2
     import argparse
+    import queue
+    import threading
 except ImportError as e:
     print(f"Redis Global ReID 모듈 import 실패: {e}")
     sys.exit(1)
@@ -42,6 +44,11 @@ parser.add_argument('--redis_port', type=int, default=6379, help='Redis server p
 
 args = parser.parse_args([])  # 빈 리스트로 기본값 사용
 
+# 전역 변수 선언
+frame_queues = []
+stop_events = []
+tracking_threads = []
+
 # ReID 모델 초기화 (한 번만)
 try:
     reid_extractor = FeatureExtractor(
@@ -53,25 +60,31 @@ try:
     global_reid_manager = RedisGlobalReIDManagerV2(
         similarity_threshold=0.5,
         feature_ttl=3000,
-        max_features_per_camera=10,
+        max_features_per_track=10,  # max_features_per_camera에서 변경
         redis_host='localhost',
         redis_port=6379,
         frame_rate=30
     )
     
-    # 실시간 추적 제너레이터 생성
-    tracking_generators = []
+    # 각 비디오에 대해 스레드 생성
     for i, video_path in enumerate(args.videos):
-        generator = run_tracking_realtime(
-            video_path, 
-            args.yolo_model, 
-            reid_extractor, 
-            camera_id=i, 
-            global_reid_manager=global_reid_manager
+        frame_queue = queue.Queue()
+        stop_event = threading.Event()
+        
+        # 스레드 생성 (올바른 인자 순서: video_path, yolo_model_path, reid_extractor, frame_queue, stop_event, camera_id, global_reid_manager)
+        thread = threading.Thread(
+            target=run_tracking,
+            args=(video_path, args.yolo_model, reid_extractor, frame_queue, stop_event, i, global_reid_manager),
+            daemon=True
         )
-        tracking_generators.append(generator)
+        
+        frame_queues.append(frame_queue)
+        stop_events.append(stop_event)
+        tracking_threads.append(thread)
+        thread.start()
     
-    print(f"[INFO] Initialized {len(tracking_generators)} video trackers")
+    print(f"[INFO] Initialized {len(tracking_threads)} video trackers")
+
     
 except Exception as e:
     print(f"ReID 모델 초기화 실패: {e}")
@@ -79,18 +92,26 @@ except Exception as e:
 
 def run_detection():
     """실시간 ReID 추적에서 현재 프레임 결과를 반환"""
+
+    global frame_queues
+
     start_time = time.time()  # 프레임 처리 시작 시간
     now = datetime.now(timezone.utc).isoformat()
 
     try:
         # 모든 카메라의 현재 프레임 결과 수집
         all_detections = []
-        for generator in tracking_generators:
+
+        # 스레드 + 큐 방식으로 데이터 수집
+        for i, frame_queue in enumerate(frame_queues):
             try:
-                detections = next(generator)  # 다음 프레임 결과 가져오기
-                all_detections.extend(detections)
-            except StopIteration:
-                # 비디오가 끝나면 다시 시작
+                # 큐에서 최신 프레임 결과 가져오기 (타임아웃 0.1초)
+                # 큐 구조: (video_path, frame, frame_detections_json)
+                video_path, frame, detections = frame_queue.get(timeout=0.1)
+                if detections and len(detections) > 0:
+                    all_detections.extend(detections)
+            except queue.Empty:
+                # 큐가 비어있으면 건너뛰기
                 continue
         
         # 감지 결과를 workers 형태로 변환
