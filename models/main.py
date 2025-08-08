@@ -21,11 +21,6 @@ WORKER_URL = "http://localhost:5000/workers"
 ZONE_URL = "http://localhost:5000/zones"
 VIOLATION_URL = "http://localhost:5000/violations"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/main
 # Redis Global ReID 모듈 import
 try:
     from redis_global_reid_main_v2 import run_tracking_realtime, FeatureExtractor, RedisGlobalReIDManagerV2
@@ -82,10 +77,6 @@ except Exception as e:
     print(f"ReID 모델 초기화 실패: {e}")
     sys.exit(1)
 
-<<<<<<< HEAD
->>>>>>> origin/main
-=======
->>>>>>> origin/main
 def run_detection():
     """실시간 ReID 추적에서 현재 프레임 결과를 반환"""
     start_time = time.time()  # 프레임 처리 시작 시간
@@ -101,19 +92,22 @@ def run_detection():
             except StopIteration:
                 # 비디오가 끝나면 다시 시작
                 continue
-        
-        # 감지 결과를 workers 형태로 변환
-        workers = []
-        for detection in all_detections:
-            worker = {
-                "worker_id": f"W{detection['workerID']:03d}",
-                "x": float(detection['position_X']),  # float64 유지
-                "y": float(detection['position_Y']),  # float64 유지
-                "zone_id": f"Z{detection['cameraID']:02d}",
-                "product_count": 1,
-                "timestamp": now,
+            
+        # 작업자 위치/생산량 정보
+        workers = [
+            {
+                "worker_id": "W001", "x": 1, "y": 3, "zone_id": "Z01",
+                "product_count": 2, "timestamp": now
+            },
+            {
+                "worker_id": "W002", "x": 15, "y": 35, "zone_id": "Z01",
+                "product_count": 3, "timestamp": now
+            },
+            {
+                "worker_id": "W003", "x": 20, "y": 10, "zone_id": "Z02",
+                "product_count": 1, "timestamp": now
             }
-            workers.append(worker)
+        ]
 
         # 위반 정보 (PPE, ROI)
         violations = [
@@ -150,86 +144,6 @@ def run_detection():
             zone_stats[zid]["total_product"] += w.get("product_count", 0)
             zone_stats[zid]["active_workers"] += 1
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    # 작업자 위치/생산량 정보
-    workers = [
-        {
-            "worker_id": "W001", "x": 1, "y": 3, "zone_id": "Z01",
-            "product_count": 2, "timestamp": now
-        },
-        {
-            "worker_id": "W002", "x": 15, "y": 35, "zone_id": "Z01",
-            "product_count": 3, "timestamp": now
-        },
-        {
-            "worker_id": "W003", "x": 20, "y": 10, "zone_id": "Z02",
-            "product_count": 1, "timestamp": now
-        }
-    ]
-
-    # 위반 정보 (PPE, ROI)
-    violations = [
-        {
-            "worker_id": "W001",
-            "zone_id": "Z01",
-            "timestamp": now,
-            "violations": {
-                "ppe": ["helmet_missing", "vest_missing"],
-                "roi": []
-            }
-        },
-        {
-            "worker_id": "W003",
-            "zone_id": "Z02",
-            "timestamp": now,
-            "violations": {
-                "ppe": [],
-                "roi": ["restricted_area_1"]
-            }
-        }
-    ]
-
-    # zone 통계
-    zone_stats = {}
-    for w in workers:
-        zid = w["zone_id"]
-        zone_stats.setdefault(zid, {
-            "zone_name": f"Zone {zid}",
-            "zone_type": "작업구역",
-            "total_product": 0,
-            "active_workers": 0
-        })
-        zone_stats[zid]["total_product"] += w.get("product_count", 0)
-        zone_stats[zid]["active_workers"] += 1
-
-    zones = []
-    for zid, stat in zone_stats.items():
-        total = stat["total_product"]
-        avg = 480 / total if total > 0 else None
-        zones.append({
-            "zone_id": zid,
-            "zone_name": stat["zone_name"],
-            "zone_type": stat["zone_type"],
-            "timestamp": now,
-            "active_workers": stat["active_workers"],
-            "active_tasks": "",
-            "avg_cycle_time_min": avg,
-            "ppe_violations": sum(
-                1 for v in violations if v["zone_id"] == zid and v["violations"]["ppe"]
-            ),
-            "hazard_dwell_count": sum(
-                1 for v in violations if v["zone_id"] == zid and v["violations"]["roi"]
-            ),
-            "recent_alerts": ""
-        })
-
-    return {
-        "workers": workers,
-        "violations": violations,
-        "zones": zones
-    }
-=======
         zones = []
         for zid, stat in zone_stats.items():
             total = stat["total_product"]
@@ -256,7 +170,7 @@ def run_detection():
             "violations": violations,
             "zones": zones
         }
-    
+        
     except Exception as e:
         processing_time = time.time() - start_time  # 오류 시에도 처리 시간 계산
         print(f"ReID 추적 실행 중 오류: {e}")
@@ -266,7 +180,6 @@ def run_detection():
             "violations": [],
             "zones": [],
         }
->>>>>>> origin/main
 
 # 주기적 전송 루프
 async def detection_loop():
@@ -294,61 +207,6 @@ async def detection_loop():
             print(f"[ERROR] Failed to send: {e}")
 
         await asyncio.sleep(1.0)
-<<<<<<< HEAD
-=======
-        zones = []
-        for zid, stat in zone_stats.items():
-            total = stat["count"]
-            avg = 480 / total if total > 0 else None
-            zones.append({
-                "zone_id": zid,
-                "zone_name": f"Zone {zid}",
-                "zone_type": "작업구역",
-                "active_workers": sum(1 for w in workers if w["zone_id"] == zid),
-                "active_tasks": "",
-                "avg_cycle_time_min": avg,
-                "ppe_violations": sum(1 for w in workers if w["zone_id"] == zid and w["status"] == "warning"),
-                "hazard_dwell_count": sum(1 for w in workers if w["zone_id"] == zid and w["status"] == "roi_violation"),
-                "recent_alerts": ""
-            })
-
-        return {
-            "timestamp": now,
-            "workers": workers,
-            "alerts": alerts,
-            "zones": zones
-        }
-        
-    except Exception as e:
-        print(f"ReID 추적 실행 중 오류: {e}")
-        # 오류 발생 시 기본 데이터 반환
-        return {
-            "timestamp": now,
-            "workers": [],
-            "alerts": [],
-            "zones": []
-        }
-
-# 매 프레임 실시간 감지 및 전송 루프
-async def detection_loop():
-    print("[INFO] AI detection started - Real-time mode")
-    while True:
-        try:
-            result = run_detection()
-            if result and result.get('workers'):  # 감지 결과가 있을 때만 전송
-                res = requests.post(NODE_SERVER_URL, json=result, timeout=1)
-                print(f"[POST] Frame sent: {res.status_code} - {len(result['workers'])} workers")
-            else:
-                print("[INFO] No workers in frame")
-        except requests.RequestException as e:
-            print(f"[ERROR] Failed to send to Node.js: {e}")
-        except Exception as e:
-            print(f"[ERROR] Detection error: {e}")
-
-        await asyncio.sleep(0.033)  # 0.033초 간격 (약 30fps)
->>>>>>> origin/main
-=======
->>>>>>> origin/main
 
 if __name__ == "__main__":
     try:

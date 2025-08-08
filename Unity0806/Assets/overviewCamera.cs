@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 public class OverviewCamera : MonoBehaviour
 {
     public float rotationSpeed = 10.0f;
-    public float zoomSpeed = 200.0f;
+    public float zoomSpeed = 1000.0f;
     public float minZoom = 500.0f;
     public float maxZoom = 4000.0f;
     public float moveSpeed = 100.0f;
