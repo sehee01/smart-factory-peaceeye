@@ -39,7 +39,7 @@ class BYTETrackerWithReID(BYTETracker):
         online_targets = super().update(dets, img_info, img_size)
         return online_targets
 
-def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_event, camera_id=0, global_reid_manager=None, max_frames=None):
+def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_event, camera_id=0, global_reid_manager=None):
     """하나의 비디오 스트림에 대한 추적을 실행하고 결과를 큐에 넣는 함수"""
     model = YOLO(yolo_model_path, task="detect")
     classNames = model.names
@@ -57,11 +57,6 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
         if not ret:
             print(f"[{video_path}] Video ended")
             break  # 영상이 끝나면 종료
-        
-        # 최대 프레임 수 제한
-        if max_frames and frame_id >= max_frames:
-            print(f"[{video_path}] Reached max frames ({max_frames})")
-            break
 
         frame_id += 1
         
@@ -80,7 +75,7 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
         frame_shape = frame.shape[:2]  # (height, width)
         
         # YOLO 탐지
-        detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0]
+        detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0] #verbose=False 출력메시지 최소화 /하나의 이미지만 처리중이지만 리스트로 반환하기때문에 [0]필요
         dets = []
         for box in detection_results.boxes:
             cls_id = int(box.cls[0])
@@ -112,41 +107,12 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
             if len(crops) > 0:
                 processed_crops = []
                 for crop in crops:
-                    # 패딩을 추가한 resize 함수
-                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
-                        """
-                        이미지를 패딩을 추가하여 target_size로 resize
-                        """
-                        h, w = image.shape[:2]
-                        target_w, target_h = target_size
-                        
-                        # 비율 계산
-                        scale = min(target_w / w, target_h / h)
-                        new_w, new_h = int(w * scale), int(h * scale)
-                        
-                        # resize
-                        resized = cv2.resize(image, (new_w, new_h))
-                        
-                        # 패딩 계산
-                        pad_w = (target_w - new_w) // 2
-                        pad_h = (target_h - new_h) // 2
-                        
-                        # 패딩이 홀수인 경우 처리
-                        pad_w_extra = (target_w - new_w) % 2
-                        pad_h_extra = (target_h - new_h) % 2
-                        
-                        # 패딩된 이미지 생성
-                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-                        
-                        return padded
-                    
-                    # 패딩을 추가한 resize 적용
-                    resized_crop = resize_with_padding(crop, (128, 256))
-                    normalized_crop = resized_crop.astype(np.float32) / 255.0
+
+                    normalized_crop = crop.astype(np.float32) / 255.0
+
                     processed_crops.append(normalized_crop)
 
-                features = reid_extractor(processed_crops).cpu().numpy()
+                features = reid_extractor(processed_crops).cpu().numpy() #방금크롭한 특징 벡터들
                 matched_tracks = set()
                 
                 for i, track in enumerate(online_targets):
@@ -199,156 +165,125 @@ def run_tracking(video_path, yolo_model_path, reid_extractor, frame_queue, stop_
     cap.release()
     frame_queue.put((video_path, None, None))
 
-def run_tracking_realtime(video_path, yolo_model_path, reid_extractor, camera_id=0, global_reid_manager=None):
-    """실시간으로 매 프레임마다 결과를 yield하는 함수"""
-    model = YOLO(yolo_model_path, task="detect")
-    classNames = model.names
+#def run_tracking_realtime(video_path, yolo_model_path, reid_extractor, camera_id=0, global_reid_manager=None):
+    # """실시간으로 매 프레임마다 결과를 yield하는 함수"""
+    # model = YOLO(yolo_model_path, task="detect")
+    # classNames = model.names
 
-    tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=300, mot20=False)
-    tracker = BYTETrackerWithReID(tracker_args, frame_rate=30, camera_id=camera_id)
+    # tracker_args = argparse.Namespace(track_thresh=0.5, match_thresh=0.8, track_buffer=300, mot20=False)
+    # tracker = BYTETrackerWithReID(tracker_args, frame_rate=30, camera_id=camera_id)
 
-    cap = cv2.VideoCapture(video_path)
-    person_count = 0
-    tracked_ids = set()
-    frame_id = 0
+    # cap = cv2.VideoCapture(video_path)
+    # person_count = 0
+    # tracked_ids = set()
+    # frame_id = 0
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            print(f"[{video_path}] Video ended")
-            break
+    # while cap.isOpened():
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         print(f"[{video_path}] Video ended")
+    #         break
 
-        frame_id += 1
+    #     frame_id += 1
         
-        # 글로벌 ReID 매니저 프레임 업데이트
-        if global_reid_manager is not None:
-            global_reid_manager.update_frame(frame_id)
+    #     # 글로벌 ReID 매니저 프레임 업데이트
+    #     if global_reid_manager is not None:
+    #         global_reid_manager.update_frame(frame_id)
 
-        # 프레임 리사이즈
-        original_height, original_width = frame.shape[:2]
-        target_width = 640
-        scale = target_width / original_width
-        target_height = int(original_height * scale)
-        frame = cv2.resize(frame, (target_width, target_height))
+    #     # 프레임 리사이즈
+    #     original_height, original_width = frame.shape[:2]
+    #     target_width = 640
+    #     scale = target_width / original_width
+    #     target_height = int(original_height * scale)
+    #     frame = cv2.resize(frame, (target_width, target_height))
         
-        # 프레임 크기 저장 (사라지는 객체 감지용)
-        frame_shape = frame.shape[:2]  # (height, width)
+    #     # 프레임 크기 저장 (사라지는 객체 감지용)
+    #     frame_shape = frame.shape[:2]  # (height, width)
         
-        # YOLO 탐지
-        detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0]
-        dets = []
-        for box in detection_results.boxes:
-            cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
-            if classNames[cls_id].lower() in ["person", "saram"]:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                dets.append([x1, y1, x2, y2, conf])
+    #     # YOLO 탐지
+    #     detection_results = model(frame, verbose=False, half=torch.cuda.is_available())[0]
+    #     dets = []
+    #     for box in detection_results.boxes:
+    #         cls_id = int(box.cls[0])
+    #         conf = float(box.conf[0])
+    #         if classNames[cls_id].lower() in ["person", "saram"]:
+    #             x1, y1, x2, y2 = box.xyxy[0].tolist()
+    #             dets.append([x1, y1, x2, y2, conf])
 
-        if len(dets) > 0:
-            dets_array = np.array(dets, dtype=np.float32)
-        else:
-            dets_array = np.empty((0, 5), dtype=np.float32)
+    #     if len(dets) > 0:
+    #         dets_array = np.array(dets, dtype=np.float32)
+    #     else:
+    #         dets_array = np.empty((0, 5), dtype=np.float32)
 
-        # ByteTrack 추적
-        online_targets = tracker.update(torch.tensor(dets_array), frame.shape[:2], frame.shape[:2], reid_extractor, global_reid_manager, frame_id)
+    #     # ByteTrack 추적
+    #     online_targets = tracker.update(torch.tensor(dets_array), frame.shape[:2], frame.shape[:2], reid_extractor, global_reid_manager, frame_id)
         
-        # 글로벌 ReID 처리
-        if len(online_targets) > 0 and reid_extractor is not None and global_reid_manager is not None:
-            crops = []
-            bboxes = []
-            for track in online_targets:
-                x1, y1, x2, y2 = map(int, track.tlbr)
-                crop = frame[y1:y2, x1:x2]
-                if crop.size == 0:
-                    crop = np.zeros((128, 64, 3), dtype=np.uint8)
-                crops.append(crop)
-                bboxes.append([x1, y1, x2, y2])
+    #     # 글로벌 ReID 처리
+    #     if len(online_targets) > 0 and reid_extractor is not None and global_reid_manager is not None:
+    #         crops = []
+    #         bboxes = []
+    #         for track in online_targets:
+    #             x1, y1, x2, y2 = map(int, track.tlbr)
+    #             crop = frame[y1:y2, x1:x2]
+    #             if crop.size == 0:
+    #                 crop = np.zeros((128, 64, 3), dtype=np.uint8)
+    #             crops.append(crop)
+    #             bboxes.append([x1, y1, x2, y2])
             
-            if len(crops) > 0:
-                processed_crops = []
-                for crop in crops:
-                    # 패딩을 추가한 resize 함수
-                    def resize_with_padding(image, target_size=(128, 256), color=(0, 0, 0)):
-                        """
-                        이미지를 패딩을 추가하여 target_size로 resize
-                        """
-                        h, w = image.shape[:2]
-                        target_w, target_h = target_size
-                        
-                        # 비율 계산
-                        scale = min(target_w / w, target_h / h)
-                        new_w, new_h = int(w * scale), int(h * scale)
-                        
-                        # resize
-                        resized = cv2.resize(image, (new_w, new_h))
-                        
-                        # 패딩 계산
-                        pad_w = (target_w - new_w) // 2
-                        pad_h = (target_h - new_h) // 2
-                        
-                        # 패딩이 홀수인 경우 처리
-                        pad_w_extra = (target_w - new_w) % 2
-                        pad_h_extra = (target_h - new_h) % 2
-                        
-                        # 패딩된 이미지 생성
-                        padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-                        padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-                        
-                        return padded
-                    
-                    # 패딩을 추가한 resize 적용
-                    resized_crop = resize_with_padding(crop, (128, 256))
-                    normalized_crop = resized_crop.astype(np.float32) / 255.0
-                    processed_crops.append(normalized_crop)
+    #         if len(crops) > 0:
+    #             processed_crops = []
+    #             for crop in crops:
+    #                 normalized_crop = crop.astype(np.float32) / 255.0
+    #                 processed_crops.append(normalized_crop)
 
-                features = reid_extractor(processed_crops).cpu().numpy()
-                matched_tracks = set()
+    #             features = reid_extractor(processed_crops).cpu().numpy()
+    #             matched_tracks = set()
                 
-                for i, track in enumerate(online_targets):
-                    if i < len(features):
-                        global_id = global_reid_manager.match_or_create(
-                            features[i], bboxes[i], camera_id, frame_id, frame_shape, matched_tracks
-                        )
-                        if global_id is not None:
-                            tracker.global_id_mapping[track.track_id] = global_id
-                            print(f"Camera {camera_id}: Local ID {track.track_id} → Global ID {global_id}")
+    #             for i, track in enumerate(online_targets):
+    #                 if i < len(features):
+    #                     global_id = global_reid_manager.match_or_create(
+    #                         features[i], bboxes[i], camera_id, frame_id, frame_shape, matched_tracks
+    #                     )
+    #                     if global_id is not None:
+    #                         tracker.global_id_mapping[track.track_id] = global_id
+    #                         print(f"Camera {camera_id}: Local ID {track.track_id} → Global ID {global_id}")
         
-        # 결과 처리 및 yield
-        frame_detections_json = []
-        for t in online_targets:
-            if t.track_id not in tracked_ids:
-                tracked_ids.add(t.track_id)
-                person_count += 1
+    #     # 결과 처리 및 yield
+    #     frame_detections_json = []
+    #     for t in online_targets:
+    #         if t.track_id not in tracked_ids:
+    #             tracked_ids.add(t.track_id)
+    #             person_count += 1
             
-            xmin, ymin, xmax, ymax = map(int, t.tlbr)
-            point_x = np.float64((xmin+xmax)/2)
-            point_y = np.float64(ymin)
+    #         xmin, ymin, xmax, ymax = map(int, t.tlbr)
+    #         point_x = np.float64((xmin+xmax)/2)
+    #         point_y = np.float64(ymin)
             
-            # 실제 좌표로 변환
-            real_x, real_y = transform_point(point_x, point_y,
-            [[0.000030, -0.000119, 0.043679],
-            [-0.000115, -0.000221, 0.290054],
-            [-0.000199, -0.000943, 1.000000]])
+    #         # 실제 좌표로 변환
+    #         real_x, real_y = transform_point(point_x, point_y,
+    #         [[0.000030, -0.000119, 0.043679],
+    #         [-0.000115, -0.000221, 0.290054],
+    #         [-0.000199, -0.000943, 1.000000]])
             
-            # 글로벌 ID 가져오기
-            global_id = tracker.global_id_mapping.get(t.track_id, t.track_id)
+    #         # 글로벌 ID 가져오기
+    #         global_id = tracker.global_id_mapping.get(t.track_id, t.track_id)
             
-            # 디버깅: 매핑된 좌표 출력 (소수점 4자리)
-            print(f"[DEBUG] Camera {camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
+    #         # 디버깅: 매핑된 좌표 출력 (소수점 4자리)
+    #         print(f"[DEBUG] Camera {camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
             
-            detection_data = {
-                "cameraID": int(camera_id),
-                "workerID": int(global_id),
-                "position_X": real_x,
-                "position_Y": real_y,
-                "frame_id": frame_id
-            }
-            frame_detections_json.append(detection_data)
+    #         detection_data = {
+    #             "cameraID": int(camera_id),
+    #             "workerID": int(global_id),
+    #             "position_X": real_x,
+    #             "position_Y": real_y,
+    #             "frame_id": frame_id
+    #         }
+    #         frame_detections_json.append(detection_data)
 
-        # 매 프레임마다 결과 yield
-        yield frame_detections_json
+    #     # 매 프레임마다 결과 yield
+    #     yield frame_detections_json
 
-    cap.release()
+    # cap.release()
 
 def main(args):
     """메인 함수: Redis Global ReID V2 초기화 및 워커 스레드 시작"""
