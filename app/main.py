@@ -91,6 +91,9 @@ class AppOrchestrator:
             # 원본의 복잡한 탐지 로직 사용
             track_list = detector.detect_and_track(frame, frame_id)
 
+            # 프레임별 매칭된 트랙 추적
+            frame_matched_tracks = set()
+
             for track in track_list:
                 local_id = track["track_id"]
                 bbox = track["bbox"]
@@ -113,7 +116,7 @@ class AppOrchestrator:
                     camera_id=self.camera_id,
                     frame_id=frame_id,
                     frame_shape=frame.shape[:2],
-                    matched_tracks=set()  # 매 프레임마다 새로운 set
+                    matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
                 )
                 
                 if global_id is None:
@@ -168,6 +171,9 @@ class AppOrchestrator:
             # 원본의 복잡한 탐지 로직 사용
             track_list = detector.detect_and_track(frame, frame_id)
 
+            # 프레임별 매칭된 트랙 추적
+            frame_matched_tracks = set()
+            
             frame_detections_json = []
             for track in track_list:
                 local_id = track["track_id"]
@@ -193,7 +199,7 @@ class AppOrchestrator:
                     camera_id=str(camera_id),
                     frame_id=frame_id,
                     frame_shape=frame.shape[:2],
-                    matched_tracks=set()
+                    matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
                 )
                 
                 if global_id is None:
