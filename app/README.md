@@ -18,3 +18,6 @@ app/
 │
 ├── tests/                         # 유닛 테스트
 └── README.md
+
+
+python -m main
