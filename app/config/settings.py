@@ -52,7 +52,7 @@ DETECTION_CONFIG = {
 # 멀티스레딩 설정 (원본과 동일)
 MULTITHREADING_CONFIG = {
     "enabled": True,
-    "max_frames": 300,  # 최대 처리 프레임 수 (약 10초)
+    "max_frames": 3000,  # 최대 처리 프레임 수 (약 10초)
     "frame_timeout": 0.1,  # 프레임 큐 타임아웃
     "thread_timeout": 1.0,  # 스레드 종료 타임아웃
 }
