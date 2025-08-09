@@ -21,7 +21,15 @@ class FeatureStoreRedisHandler:
     def _make_track_key(self, global_id: int, camera_id: str, local_track_id: int) -> str:
         return f"global_track:{global_id}:{camera_id}:{local_track_id}"
 
-    def _make_track_data_key(self, global_id: int) -> str:
+    def _make_track_data_key(self, global_id: int, camera_id: Optional[str] = None, local_track_id: Optional[int] = None) -> str:
+        """
+        신규 스키마 키 생성자.
+        - 선호: global_track_data:{global_id}:{camera_id}:{local_track_id}
+        - (이전 레거시) global_track_data:{global_id}
+        """
+        if camera_id is not None and local_track_id is not None:
+            return f"global_track_data:{global_id}:{camera_id}:{local_track_id}"
+        # 레거시: 주석 처리 대상이지만 하위호환 호출을 위해 남겨둠
         return f"global_track_data:{global_id}"
 
     def store_feature(self, global_id: int, camera_id: str, local_track_id: int, feature: np.ndarray):
@@ -31,139 +39,107 @@ class FeatureStoreRedisHandler:
         with self.lock:
             self.redis.setex(key, self.feature_ttl, data)
 
-    def store_feature_with_metadata(self, global_id: int, camera_id: str, frame_id: int, 
-                                  feature: np.ndarray, bbox: List[int], 
-                                  global_frame_counter: int):
-        """메타데이터와 함께 feature 저장"""
-        data_key = self._make_track_data_key(global_id)
-        track_key = f"global_track:{global_id}"
-        
+    def store_feature_with_metadata(self, global_id: int, camera_id: str, frame_id: int,
+                                  feature: np.ndarray, bbox: List[int],
+                                  global_frame_counter: int,
+                                  local_track_id: Optional[int] = None):
+        """메타데이터와 함께 feature 저장 (신규 per-cam-local 키만 사용)"""
+        # 레거시 data_key/track_key 사용부는 주석 처리
+        # data_key = self._make_track_data_key(global_id)
+        # track_key = f"global_track:{global_id}"
+
+        camera_id_str = str(camera_id)
+        # 신규 스키마 키를 기존 변수명인 data_key로 사용
+        data_key = self._make_track_data_key(
+            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+        )
+
         with self.lock:
-            # 기존 데이터 가져오기
             track_data = self.redis.get(data_key)
             if track_data:
                 track_info = pickle.loads(track_data)
+                if not isinstance(track_info, dict):
+                    track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
             else:
-                track_info = {
-                    'cameras': {},
-                    'is_disappeared': False,
-                    'disappeared_since': None,
-                    'last_activity': global_frame_counter
-                }
-            
-            camera_id_str = str(camera_id)
-            
-            # 카메라 정보 초기화 또는 업데이트
-            if camera_id_str not in track_info['cameras']:
-                track_info['cameras'][camera_id_str] = {
-                    'features': [],
-                    'last_seen': global_frame_counter,
-                    'last_bbox': bbox
-                }
-            
-            # 특징 추가 (슬라이딩 윈도우 제거: 모든 히스토리 보관)
-            if feature is not None:
-                track_info['cameras'][camera_id_str]['features'].append(feature)
-            
-            # 메타데이터 업데이트
-            track_info['cameras'][camera_id_str]['last_seen'] = global_frame_counter
-            track_info['cameras'][camera_id_str]['last_bbox'] = bbox
-            track_info['last_activity'] = global_frame_counter
-            
-            # 사라진 객체가 다시 나타난 경우 상태 복구
-            if track_info.get('is_disappeared', False) and feature is not None:
-                track_info['is_disappeared'] = False
-                track_info['disappeared_since'] = None
-                print(f"Redis: Restored disappeared track {global_id} to normal state")
-            
-            # 저장
-            self.redis.set(data_key, pickle.dumps(track_info))
-            self.redis.set(track_key, b'1')
+                track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
 
-    def create_new_track(self, global_id: int, camera_id: str, frame_id: int, 
-                        feature: np.ndarray, bbox: List[int], global_frame_counter: int):
-        """새로운 트랙 생성"""
-        track_key = f"global_track:{global_id}"
-        data_key = self._make_track_data_key(global_id)
-        
-        track_info = {
-            'cameras': {
-                str(camera_id): {
-                    'features': [feature] if feature is not None else [],
-                    'last_seen': global_frame_counter,
-                    'last_bbox': bbox
-                }
-            },
-            'is_disappeared': False,
-            'disappeared_since': None,
-            'last_activity': global_frame_counter
-        }
-        
-        with self.lock:
-            # 활성 객체: TTL 없음 (원본과 동일)
+            if feature is not None:
+                track_info.setdefault('features', []).append(feature)
+            track_info['last_seen'] = global_frame_counter
+            track_info['last_bbox'] = bbox
+
             self.redis.set(data_key, pickle.dumps(track_info))
-            self.redis.set(track_key, b'1')
+
+    def create_new_track(self, global_id: int, camera_id: str, frame_id: int,
+                        feature: np.ndarray, bbox: List[int], global_frame_counter: int,
+                        local_track_id: Optional[int] = None):
+        """새로운 트랙 생성 (신규 per-cam-local 키만 사용)"""
+        # 레거시 트랙 키/데이터 키 저장은 주석 처리
+        # track_key = f"global_track:{global_id}"
+        # data_key = self._make_track_data_key(global_id)
+
+        camera_id_str = str(camera_id)
+        data_key = self._make_track_data_key(
+            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+        )
+
+        track_info = {
+            'features': [feature] if feature is not None else [],
+            'last_seen': global_frame_counter,
+            'last_bbox': bbox
+        }
+
+        with self.lock:
+            self.redis.set(data_key, pickle.dumps(track_info))
             print(f"Redis: Created new track {global_id} for camera {camera_id}")
 
-    def create_disappeared_track(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int):
-        """사라진 객체용 새로운 트랙 생성"""
-        track_key = f"global_track:{global_id}"
-        data_key = self._make_track_data_key(global_id)
-        
-        track_info = {
-            'cameras': {
-                str(camera_id): {
-                    'features': [],
-                    'last_seen': frame_id,
-                    'last_bbox': bbox
-                }
-            },
-            'is_disappeared': True,
-            'disappeared_since': frame_id,
-            'last_activity': frame_id
-        }
-        
-        with self.lock:
-            # 사라진 객체: TTL 적용 (원본과 동일)
-            self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
-            self.redis.setex(track_key, self.feature_ttl, b'1')
+    def create_disappeared_track(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
+                                 local_track_id: Optional[int] = None):
+        """사라진 객체용 새로운 트랙 생성 (신규 per-cam-local 키만 사용)"""
+        # 레거시 트랙 키/데이터 키 저장은 주석 처리
+        # track_key = f"global_track:{global_id}"
+        # data_key = self._make_track_data_key(global_id)
 
-    def mark_track_as_disappeared(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int):
-        """트랙을 사라진 상태로 표시"""
-        data_key = self._make_track_data_key(global_id)
-        
+        camera_id_str = str(camera_id)
+        data_key = self._make_track_data_key(
+            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+        )
+
+        track_info = {
+            'features': [],
+            'last_seen': frame_id,
+            'last_bbox': bbox
+        }
+
+        with self.lock:
+            self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
+
+    def mark_track_as_disappeared(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
+                                  local_track_id: Optional[int] = None):
+        """트랙을 사라진 상태로 표시 (신규 per-cam-local 키만 사용)"""
+        # 레거시 data_key/track_key 갱신은 주석 처리
+        # data_key = self._make_track_data_key(global_id)
+        # track_key = f"global_track:{global_id}"
+
+        camera_id_str = str(camera_id)
+        data_key = self._make_track_data_key(
+            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+        )
+
         with self.lock:
             track_data = self.redis.get(data_key)
             if track_data:
                 track_info = pickle.loads(track_data)
+                if not isinstance(track_info, dict):
+                    track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
             else:
-                track_info = {
-                    'cameras': {},
-                    'is_disappeared': False,
-                    'disappeared_since': None,
-                    'last_activity': frame_id
-                }
-            
-            camera_id_str = str(camera_id)
-            
-            if camera_id_str not in track_info['cameras']:
-                track_info['cameras'][camera_id_str] = {
-                    'features': [],
-                    'last_seen': frame_id,
-                    'last_bbox': bbox
-                }
-            
-            # 사라진 상태로 표시
-            track_info['is_disappeared'] = True
-            track_info['disappeared_since'] = frame_id
-            track_info['last_activity'] = frame_id
-            track_info['cameras'][camera_id_str]['last_seen'] = frame_id
-            track_info['cameras'][camera_id_str]['last_bbox'] = bbox
-            
-            # 사라진 객체: TTL 적용
+                track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
+
+            track_info['last_seen'] = frame_id
+            track_info['last_bbox'] = bbox
+
+            # 사라진 객체: TTL 적용 (신규 키)
             self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
-            track_key = f"global_track:{global_id}"
-            self.redis.setex(track_key, self.feature_ttl, b'1')
 
     def get_candidate_features(self, exclude_camera: str = None) -> Dict[int, np.ndarray]:
         """기본 candidate features 조회 (하위 호환성)"""
@@ -186,96 +162,98 @@ class FeatureStoreRedisHandler:
         return result
 
     def get_candidate_features_by_camera(self, camera_id: str) -> Dict[int, Dict]:
-        """특정 카메라의 candidate features 조회"""
-        result = {}
-        data_keys = self.redis.keys("global_track_data:*")
-        
+        """특정 카메라의 candidate features 조회 (신규 per-cam-local 키 형식 사용)"""
+        result: Dict[int, Dict] = {}
+        # 신규 스키마 키 패턴만 조회
+        data_keys = self.redis.keys("global_track_data:*:*:*")
+
         print(f"Redis: Searching for candidates in camera {camera_id}, found {len(data_keys)} data keys")
-        
-        for data_key in data_keys:
+
+        for raw_key in data_keys:
             try:
-                # 키 파싱 안전하게
+                # 키 파싱
+                data_key = raw_key  # 기존 변수명 재사용
                 key_parts = data_key.decode().split(":")
-                if len(key_parts) < 3:
+                # global_track_data:{global_id}:{camera_id}:{local_track_id}
+                if len(key_parts) != 5:
                     continue
-                    
+
                 global_id = int(key_parts[2])
+                camera_id_str = str(camera_id)
+                key_camera = key_parts[3]
+                if key_camera != camera_id_str:
+                    continue
+
+                # 값 로드
                 track_data = self.redis.get(data_key)
-                
-                if track_data:
-                    track_info = pickle.loads(track_data)
-                    camera_id_str = str(camera_id)
-                    
-                    # 데이터 구조 검증
-                    if not isinstance(track_info, dict):
-                        continue
-                    if 'cameras' not in track_info:
-                        continue
-                    if camera_id_str not in track_info['cameras']:
-                        continue
-                        
-                    camera_data = track_info['cameras'][camera_id_str]
-                    
-                    # camera_data 구조 검증
-                    if not isinstance(camera_data, dict):
-                        continue
-                        
-                    result[global_id] = {
-                        'features': camera_data.get('features', []),
-                        'bbox': camera_data.get('last_bbox', [0, 0, 0, 0]),
-                        'last_seen': camera_data.get('last_seen', 0)
-                    }
-                    print(f"Redis: Found candidate track {global_id} for camera {camera_id}")
-                    print(f"Redis: Track {global_id} data: {camera_data}")
+                if not track_data:
+                    continue
+                track_info = pickle.loads(track_data)
+                if not isinstance(track_info, dict):
+                    continue
+
+                # 병합: 동일 global_id의 여러 local_track_id를 하나로
+                entry = result.get(global_id, {'features': [], 'bbox': [0, 0, 0, 0], 'last_seen': 0})
+                features = track_info.get('features', [])
+                if isinstance(features, list):
+                    entry['features'].extend(features)
+                last_seen = int(track_info.get('last_seen', 0))
+                if last_seen >= entry.get('last_seen', 0):
+                    entry['last_seen'] = last_seen
+                    entry['bbox'] = track_info.get('last_bbox', entry['bbox'])
+                result[global_id] = entry
+
+                print(f"Redis: Found candidate track {global_id} for camera {camera_id}")
             except Exception as e:
                 print(f"Redis: Error processing data key {data_key}: {e}")
                 continue
-        
+
         print(f"Redis: Returning {len(result)} candidates for camera {camera_id}")
         return result
 
     def cleanup_expired_tracks(self, global_frame_counter: int, ttl_frames: int):
-        """만료된 트랙 정리"""
-        data_keys = self.redis.keys("global_track_data:*")
-        
-        for data_key in data_keys:
+        """만료된 트랙 정리 (신규 per-cam-local 키 기준)"""
+        data_keys = self.redis.keys("global_track_data:*:*:*")
+
+        # global_id별 최대 last_seen 집계
+        max_seen_by_global: Dict[int, int] = {}
+        for k in data_keys:
             try:
-                global_id = int(data_key.decode().split(":")[2])
-                track_data = self.redis.get(data_key)
-                
-                if track_data:
-                    track_info = pickle.loads(track_data)
-                    
-                    # 모든 카메라의 마지막 업데이트 시간 확인
-                    max_last_seen = 0
-                    for camera_data in track_info['cameras'].values():
-                        max_last_seen = max(max_last_seen, camera_data.get('last_seen', 0))
-                    
-                    # TTL 결정
-                    is_disappeared = track_info.get('is_disappeared', False)
-                    if is_disappeared:
-                        ttl = ttl_frames  # 사라진 객체: 기본 TTL
-                    else:
-                        ttl = ttl_frames * 2  # 활성 객체: 2배 TTL
-                    
-                    # TTL이 만료된 트랙 제거
-                    if global_frame_counter - max_last_seen > ttl:
-                        self._remove_track(global_id)
-                        status = "disappeared" if is_disappeared else "normal"
-                        print(f"Redis: Expired {status} track {global_id}")
-            except Exception as e:
+                parts = k.decode().split(":")
+                if len(parts) != 5:
+                    continue
+                global_id = int(parts[2])
+                val = self.redis.get(k)
+                if not val:
+                    continue
+                info = pickle.loads(val)
+                if not isinstance(info, dict):
+                    continue
+                last_seen = int(info.get('last_seen', 0))
+                prev = max_seen_by_global.get(global_id, 0)
+                if last_seen > prev:
+                    max_seen_by_global[global_id] = last_seen
+            except Exception:
                 continue
 
+        # 활성 객체는 TTL*2, 사라진 상태 플래그는 신규 스키마에 없으므로 모두 활성로 간주
+        for gid, max_last_seen in max_seen_by_global.items():
+            ttl = ttl_frames * 2
+            if global_frame_counter - max_last_seen > ttl:
+                self._remove_track(gid)
+                print(f"Redis: Expired track {gid}")
+
     def _remove_track(self, global_id: int):
-        """트랙 완전 제거"""
-        track_key = f"global_track:{global_id}"
-        data_key = self._make_track_data_key(global_id)
-        
-        # 트랙 히스토리도 함께 제거
+        """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
+        # 레거시 키 삭제는 주석 처리
+        # track_key = f"global_track:{global_id}"
+        # legacy_data_key = self._make_track_data_key(global_id)
+
+        new_data_keys = self.redis.keys(f"global_track_data:{global_id}:*:*")
         history_keys = self.redis.keys(f"track_history:*:{global_id}")
-        all_keys = [track_key, data_key] + history_keys
-        
-        self.redis.delete(*all_keys)
+        keys_to_delete = list(new_data_keys) + list(history_keys)
+        if keys_to_delete:
+            self.redis.delete(*keys_to_delete)
 
     def generate_new_global_id(self) -> int:
         return self.redis.incr(self.global_id_counter_key)

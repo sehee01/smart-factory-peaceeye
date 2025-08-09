@@ -45,8 +45,9 @@ class GlobalReIDManager:
         
         return touching_boundary or is_shrinking
 
-    def match_or_create(self, features: np.ndarray, bbox: List[int], camera_id: str, 
-                       frame_id: int, frame_shape: tuple, matched_tracks: Optional[Set[int]] = None) -> Optional[int]:
+    def match_or_create(self, features: np.ndarray, bbox: List[int], camera_id: str,
+                        frame_id: int, frame_shape: tuple, matched_tracks: Optional[Set[int]] = None,
+                        local_track_id: Optional[int] = None) -> Optional[int]:
         """
         사라지는 객체는 ReID 스킵하는 Global ReID 매칭
         
@@ -74,7 +75,7 @@ class GlobalReIDManager:
         if is_disappearing:
             print(f"Global ReID: Skipping ReID for disappearing object")
             # 사라지는 객체는 기존 ID 유지 (ReID 스킵)
-            return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks)
+            return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks, local_track_id)
         
         # 2단계: 정상적인 ReID 매칭
         # 특징 벡터 정규화 (0으로 나누기 방지)
@@ -87,7 +88,7 @@ class GlobalReIDManager:
         if same_camera_match:
             best_match_id, best_similarity = same_camera_match
             print(f"Global ReID: Same camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
-            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id)
+            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id, local_track_id)
             matched_tracks.add(best_match_id)
             return best_match_id
         
@@ -96,13 +97,13 @@ class GlobalReIDManager:
         if other_camera_match:
             best_match_id, best_similarity = other_camera_match
             print(f"Global ReID: Cross camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
-            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id)
+            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id, local_track_id)
             matched_tracks.add(best_match_id)
             return best_match_id
         
         # 새로운 글로벌 ID 생성
         global_id = self.redis.generate_new_global_id()
-        self._create_track(global_id, features, bbox, camera_id, frame_id)
+        self._create_track(global_id, features, bbox, camera_id, frame_id, local_track_id)
         print(f"Global ReID: Created new track {global_id}")
         return global_id
 
@@ -210,24 +211,25 @@ class GlobalReIDManager:
         else:
             return 0.0
 
-    def _update_track_camera(self, global_id: int, features: np.ndarray, bbox: List[int], 
-                           camera_id: str, frame_id: int):
+    def _update_track_camera(self, global_id: int, features: np.ndarray, bbox: List[int],
+                             camera_id: str, frame_id: int, local_track_id: Optional[int] = None):
         """기존 트랙에 새로운 카메라 정보 추가/업데이트"""
         self.redis.store_feature_with_metadata(
-            global_id, camera_id, frame_id, features, bbox, 
-            self.global_frame_counter
+            global_id, camera_id, frame_id, features, bbox,
+            self.global_frame_counter, local_track_id
         )
 
-    def _create_track(self, global_id: int, features: np.ndarray, bbox: List[int], 
-                     camera_id: str, frame_id: int):
+    def _create_track(self, global_id: int, features: np.ndarray, bbox: List[int],
+                      camera_id: str, frame_id: int, local_track_id: Optional[int] = None):
         """새로운 트랙 생성"""
         self.redis.create_new_track(
-            global_id, camera_id, frame_id, features, bbox, 
-            self.global_frame_counter
+            global_id, camera_id, frame_id, features, bbox,
+            self.global_frame_counter, local_track_id
         )
 
-    def _get_existing_id_for_disappearing_object(self, bbox: List[int], camera_id: str, 
-                                               frame_id: int, matched_tracks: Set[int]) -> Optional[int]:
+    def _get_existing_id_for_disappearing_object(self, bbox: List[int], camera_id: str,
+                                                 frame_id: int, matched_tracks: Set[int],
+                                                 local_track_id: Optional[int] = None) -> Optional[int]:
         """사라지는 객체의 기존 ID를 찾아서 반환"""
         candidates = self.redis.get_candidate_features_by_camera(camera_id)
         best_match_id = None
@@ -261,7 +263,7 @@ class GlobalReIDManager:
         # 기존 ID를 찾지 못한 경우 새로운 사라진 트랙 생성
         global_id = self.redis.generate_new_global_id()
         print(f"Global ReID: Created new disappeared ID {global_id} for disappearing object")
-        self.redis.create_disappeared_track(global_id, bbox, camera_id, frame_id)
+        self.redis.create_disappeared_track(global_id, bbox, camera_id, frame_id, local_track_id)
         return global_id
 
     def reassign_global_id(self, camera_id: str, local_track_id: int, feature: np.ndarray) -> int:

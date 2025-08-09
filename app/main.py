@@ -126,7 +126,8 @@ class AppOrchestrator:
                         camera_id=self.camera_id,
                         frame_id=frame_id,
                         frame_shape=frame.shape[:2],
-                        matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
+                        matched_tracks=frame_matched_tracks,  # 프레임 내에서 공유
+                        local_track_id=local_id
                     )
                     
                     if global_id is None:
@@ -142,7 +143,8 @@ class AppOrchestrator:
                 
                 try:
                     # 실제 좌표로 변환 (설정에서 가져온 매트릭스 사용)
-                    real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
+                    real_x, real_y = point_x, point_y #테스트시 연산 최소화 위한 옵션
+                    # real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
                     
                     print(f"[DEBUG] Camera {self.camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
                 except Exception as e:
@@ -220,7 +222,8 @@ class AppOrchestrator:
                         camera_id=str(camera_id),
                         frame_id=frame_id,
                         frame_shape=frame.shape[:2],
-                        matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
+                        matched_tracks=frame_matched_tracks,  # 프레임 내에서 공유
+                        local_track_id=local_id
                     )
                     
                     if global_id is None:
