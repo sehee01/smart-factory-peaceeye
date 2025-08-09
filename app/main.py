@@ -24,25 +24,13 @@ for p in EXTRA_PATHS:
 if not hasattr(np, 'float'):
     np.float = float
 
-try:
-    from torchreid.utils.feature_extractor import FeatureExtractor
-    FEATURE_EXTRACTOR_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Feature extractor not available: {e}")
-    FEATURE_EXTRACTOR_AVAILABLE = False
-
-try:
-    from models.mapping.point_transformer import transform_point
-    TRANSFORM_POINT_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: transform_point not available: {e}")
-    TRANSFORM_POINT_AVAILABLE = False
-
+from torchreid.utils.feature_extractor import FeatureExtractor
 from detector.detector_manager import ByteTrackDetectorManager
 from reid.reid_manager import GlobalReIDManager
 from reid.redis_handler import FeatureStoreRedisHandler
 from reid.similarity import FeatureSimilarityCalculator
 from config import settings
+from models.mapping.point_transformer import transform_point
 
 
 class AppOrchestrator:
@@ -59,18 +47,15 @@ class AppOrchestrator:
         self.reid_conf = reid_conf
         
         # Feature Extractor 초기화 (설정에서 가져온 값 사용)
-        if FEATURE_EXTRACTOR_AVAILABLE:
-            device = settings.FEATURE_EXTRACTOR_CONFIG["device"]
-            if device == "auto":
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            
-            self.feature_extractor = FeatureExtractor(
-                model_name=settings.FEATURE_EXTRACTOR_CONFIG["model_name"],
-                model_path=settings.FEATURE_EXTRACTOR_CONFIG["model_path"],
-                device=device
-            )
-        else:
-            self.feature_extractor = None
+        device = settings.FEATURE_EXTRACTOR_CONFIG["device"]
+        if device == "auto":
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+        self.feature_extractor = FeatureExtractor(
+            model_name=settings.FEATURE_EXTRACTOR_CONFIG["model_name"],
+            model_path=settings.FEATURE_EXTRACTOR_CONFIG["model_path"],
+            device=device
+        )
 
         # Redis 및 ReID 매니저 초기화 (공유)
         redis_handler = FeatureStoreRedisHandler(
@@ -138,17 +123,13 @@ class AppOrchestrator:
                 point_x = (x1 + x2) / 2
                 point_y = y1
                 
-                if TRANSFORM_POINT_AVAILABLE:
-                    try:
-                        # 실제 좌표로 변환 (설정에서 가져온 매트릭스 사용)
-                        from config import settings
-                        real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
-                        
-                        print(f"[DEBUG] Camera {self.camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
-                    except Exception as e:
-                        print(f"Warning: Coordinate transformation failed: {e}")
-                        real_x, real_y = point_x, point_y
-                else:
+                try:
+                    # 실제 좌표로 변환 (설정에서 가져온 매트릭스 사용)
+                    real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
+                    
+                    print(f"[DEBUG] Camera {self.camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
+                except Exception as e:
+                    print(f"Warning: Coordinate transformation failed: {e}")
                     real_x, real_y = point_x, point_y
 
                 # --- 결과 디스플레이 ---
@@ -222,15 +203,11 @@ class AppOrchestrator:
                 point_x = (x1 + x2) / 2
                 point_y = y1
                 
-                if TRANSFORM_POINT_AVAILABLE:
-                    try:
-                        from config import settings
-                        real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
-                        print(f"[DEBUG] Camera {camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
-                    except Exception as e:
-                        print(f"Warning: Coordinate transformation failed: {e}")
-                        real_x, real_y = point_x, point_y
-                else:
+                try:
+                    real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
+                    print(f"[DEBUG] Camera {camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
+                except Exception as e:
+                    print(f"Warning: Coordinate transformation failed: {e}")
                     real_x, real_y = point_x, point_y
 
                 # JSON 데이터 생성

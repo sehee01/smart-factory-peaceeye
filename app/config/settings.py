@@ -22,12 +22,12 @@ REDIS_CONFIG = {
 
 # ReID 설정 (원본의 복잡한 설정 반영)
 REID_CONFIG = {
-    "threshold": 0.7,
+    "threshold": 0.5,  # 원본과 동일한 임계값
     "ttl": 300,  # seconds
     "max_features_per_camera": 10,
     "frame_rate": 30,
     "feature_ttl": 3000,  # 100초 (원본과 동일)
-    "similarity_threshold": 0.5,  # 원본과 동일
+    "similarity_threshold": 0.3,  # 더 관대한 매칭을 위해 낮춤
 }
 
 # 입력 비디오 경로 (원본과 동일)

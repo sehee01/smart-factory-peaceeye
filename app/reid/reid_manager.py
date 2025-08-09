@@ -116,6 +116,8 @@ class GlobalReIDManager:
         """같은 카메라 내 매칭"""
         candidates = self.redis.get_candidate_features_by_camera(camera_id)
         
+        print(f"[DEBUG] Same camera matching for camera {camera_id}: found {len(candidates)} candidates")
+        
         best_match_id = None
         best_similarity = 0
         
@@ -126,9 +128,9 @@ class GlobalReIDManager:
             candidate_features = candidate_data['features']
             candidate_bbox = candidate_data.get('bbox', bbox)
             
-            # 위치 기반 필터링 (같은 카메라에서만)
+            # 위치 기반 필터링 (같은 카메라에서만) - 더 관대하게
             location_score = self._calculate_location_score(bbox, candidate_bbox)
-            if location_score < 0.3:  # 너무 멀면 제외
+            if location_score < 0.1:  # 너무 멀면 제외 (더 관대하게)
                 continue
             
             # 특징 유사도 계산
@@ -144,13 +146,18 @@ class GlobalReIDManager:
                 
                 feature_similarity = self.similarity.calculate_similarity(features, weighted_average)
                 
-                # 위치 기반 동적 임계값 계산
+                # 위치 기반 동적 임계값 계산 (원본과 동일)
+                # 위치가 가까우면 임계값을 낮춤 (더 관대한 매칭)
                 dynamic_threshold = self.threshold * (1.0 - location_score * 0.5)
+                # 최소 임계값 보장 (너무 낮아지지 않도록)
                 dynamic_threshold = max(dynamic_threshold, self.threshold * 0.3)
+                
+                print(f"[DEBUG] Track {global_id}: similarity={feature_similarity:.3f}, threshold={dynamic_threshold:.3f}, location_score={location_score:.3f}")
                 
                 if feature_similarity > best_similarity and feature_similarity > dynamic_threshold:
                     best_similarity = feature_similarity
                     best_match_id = global_id
+                    print(f"[DEBUG] New best match: Track {global_id} (similarity: {feature_similarity:.3f})")
         
         if best_match_id:
             return best_match_id, best_similarity
@@ -180,7 +187,8 @@ class GlobalReIDManager:
                 
                 similarity = self.similarity.calculate_similarity(features, weighted_average)
                 
-                if similarity > best_similarity and similarity > self.threshold:
+                # 다른 카메라는 더 엄격한 임계값 사용 (원본과 동일)
+                if similarity > best_similarity and similarity > self.threshold * 1.2:
                     best_similarity = similarity
                     best_match_id = global_id
         

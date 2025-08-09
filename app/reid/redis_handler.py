@@ -105,8 +105,10 @@ class FeatureStoreRedisHandler:
         }
         
         with self.lock:
+            # 활성 객체: TTL 없음 (원본과 동일)
             self.redis.set(data_key, pickle.dumps(track_info))
             self.redis.set(track_key, b'1')
+            print(f"Redis: Created new track {global_id} for camera {camera_id}")
 
     def create_disappeared_track(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int):
         """사라진 객체용 새로운 트랙 생성"""
@@ -127,7 +129,7 @@ class FeatureStoreRedisHandler:
         }
         
         with self.lock:
-            # 사라진 객체: TTL 적용
+            # 사라진 객체: TTL 적용 (원본과 동일)
             self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
             self.redis.setex(track_key, self.feature_ttl, b'1')
 
@@ -193,25 +195,48 @@ class FeatureStoreRedisHandler:
         result = {}
         data_keys = self.redis.keys("global_track_data:*")
         
+        print(f"Redis: Searching for candidates in camera {camera_id}, found {len(data_keys)} data keys")
+        
         for data_key in data_keys:
             try:
-                global_id = int(data_key.decode().split(":")[2])
+                # 키 파싱 안전하게
+                key_parts = data_key.decode().split(":")
+                if len(key_parts) < 3:
+                    continue
+                    
+                global_id = int(key_parts[2])
                 track_data = self.redis.get(data_key)
                 
                 if track_data:
                     track_info = pickle.loads(track_data)
                     camera_id_str = str(camera_id)
                     
-                    if camera_id_str in track_info['cameras']:
-                        camera_data = track_info['cameras'][camera_id_str]
-                        result[global_id] = {
-                            'features': camera_data.get('features', []),
-                            'bbox': camera_data.get('last_bbox', [0, 0, 0, 0]),
-                            'last_seen': camera_data.get('last_seen', 0)
-                        }
+                    # 데이터 구조 검증
+                    if not isinstance(track_info, dict):
+                        continue
+                    if 'cameras' not in track_info:
+                        continue
+                    if camera_id_str not in track_info['cameras']:
+                        continue
+                        
+                    camera_data = track_info['cameras'][camera_id_str]
+                    
+                    # camera_data 구조 검증
+                    if not isinstance(camera_data, dict):
+                        continue
+                        
+                    result[global_id] = {
+                        'features': camera_data.get('features', []),
+                        'bbox': camera_data.get('last_bbox', [0, 0, 0, 0]),
+                        'last_seen': camera_data.get('last_seen', 0)
+                    }
+                    print(f"Redis: Found candidate track {global_id} for camera {camera_id}")
+                    print(f"Redis: Track {global_id} data: {camera_data}")
             except Exception as e:
+                print(f"Redis: Error processing data key {data_key}: {e}")
                 continue
         
+        print(f"Redis: Returning {len(result)} candidates for camera {camera_id}")
         return result
 
     def cleanup_expired_tracks(self, global_frame_counter: int, ttl_frames: int):
