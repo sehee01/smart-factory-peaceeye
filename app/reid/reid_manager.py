@@ -16,13 +16,11 @@ class GlobalReIDManager:
                  similarity_calc: FeatureSimilarityCalculator,
                  similarity_threshold: float = 0.7,
                  feature_ttl: int = 300,
-                 max_features_per_camera: int = 10,
                  frame_rate: int = 30):
         self.redis = redis_handler
         self.similarity = similarity_calc
         self.threshold = similarity_threshold
         self.feature_ttl = feature_ttl
-        self.max_features_per_camera = max_features_per_camera
         self.frame_rate = frame_rate
         self.global_frame_counter = 0
 
@@ -217,7 +215,7 @@ class GlobalReIDManager:
         """기존 트랙에 새로운 카메라 정보 추가/업데이트"""
         self.redis.store_feature_with_metadata(
             global_id, camera_id, frame_id, features, bbox, 
-            self.max_features_per_camera, self.global_frame_counter
+            self.global_frame_counter
         )
 
     def _create_track(self, global_id: int, features: np.ndarray, bbox: List[int], 

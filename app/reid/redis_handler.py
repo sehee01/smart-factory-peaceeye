@@ -32,7 +32,7 @@ class FeatureStoreRedisHandler:
             self.redis.setex(key, self.feature_ttl, data)
 
     def store_feature_with_metadata(self, global_id: int, camera_id: str, frame_id: int, 
-                                  feature: np.ndarray, bbox: List[int], max_features: int, 
+                                  feature: np.ndarray, bbox: List[int], 
                                   global_frame_counter: int):
         """메타데이터와 함께 feature 저장"""
         data_key = self._make_track_data_key(global_id)
@@ -61,14 +61,9 @@ class FeatureStoreRedisHandler:
                     'last_bbox': bbox
                 }
             
-            # 특징 추가
+            # 특징 추가 (슬라이딩 윈도우 제거: 모든 히스토리 보관)
             if feature is not None:
                 track_info['cameras'][camera_id_str]['features'].append(feature)
-                
-                # 슬라이딩 윈도우 적용
-                if len(track_info['cameras'][camera_id_str]['features']) > max_features:
-                    track_info['cameras'][camera_id_str]['features'] = \
-                        track_info['cameras'][camera_id_str]['features'][-max_features:]
             
             # 메타데이터 업데이트
             track_info['cameras'][camera_id_str]['last_seen'] = global_frame_counter
