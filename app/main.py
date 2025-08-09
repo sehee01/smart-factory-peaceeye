@@ -46,6 +46,9 @@ class AppOrchestrator:
         self.redis_conf = redis_conf
         self.reid_conf = reid_conf
         
+        # 로컬 ID와 글로벌 ID 매핑 저장소
+        self.local_to_global_mapping = {}
+        
         # Feature Extractor 초기화 (설정에서 가져온 값 사용)
         device = settings.FEATURE_EXTRACTOR_CONFIG["device"]
         if device == "auto":
@@ -109,18 +112,29 @@ class AppOrchestrator:
                     # 단순한 RGB 평균 feature (fallback)
                     feature = self._extract_feature_simple(crop)
 
-                # 원본의 복잡한 ReID 로직 사용
-                global_id = self.reid.match_or_create(
-                    features=feature,
-                    bbox=bbox,
-                    camera_id=self.camera_id,
-                    frame_id=frame_id,
-                    frame_shape=frame.shape[:2],
-                    matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
-                )
-                
-                if global_id is None:
-                    global_id = local_id  # 매칭 실패 시 로컬 ID 사용
+                # 로컬 ID와 글로벌 ID 매핑 확인
+                camera_key = f"{self.camera_id}_{local_id}"
+                if camera_key in self.local_to_global_mapping:
+                    # 기존 매핑이 있으면 사용
+                    global_id = self.local_to_global_mapping[camera_key]
+                    print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                else:
+                    # 새로운 ReID 매칭 시도
+                    global_id = self.reid.match_or_create(
+                        features=feature,
+                        bbox=bbox,
+                        camera_id=self.camera_id,
+                        frame_id=frame_id,
+                        frame_shape=frame.shape[:2],
+                        matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
+                    )
+                    
+                    if global_id is None:
+                        global_id = local_id  # 매칭 실패 시 로컬 ID 사용
+                    else:
+                        # 새로운 매핑 저장
+                        self.local_to_global_mapping[camera_key] = global_id
+                        print(f"[DEBUG] New mapping: Local {local_id} -> Global {global_id}")
 
                 # --- 좌표 변환 (원본 기능 복원) ---
                 point_x = (x1 + x2) / 2
@@ -192,18 +206,29 @@ class AppOrchestrator:
                 else:
                     feature = self._extract_feature_simple(crop)
 
-                # 원본의 복잡한 ReID 로직 사용
-                global_id = self.reid.match_or_create(
-                    features=feature,
-                    bbox=bbox,
-                    camera_id=str(camera_id),
-                    frame_id=frame_id,
-                    frame_shape=frame.shape[:2],
-                    matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
-                )
-                
-                if global_id is None:
-                    global_id = local_id
+                # 로컬 ID와 글로벌 ID 매핑 확인
+                camera_key = f"{camera_id}_{local_id}"
+                if camera_key in self.local_to_global_mapping:
+                    # 기존 매핑이 있으면 사용
+                    global_id = self.local_to_global_mapping[camera_key]
+                    print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                else:
+                    # 새로운 ReID 매칭 시도
+                    global_id = self.reid.match_or_create(
+                        features=feature,
+                        bbox=bbox,
+                        camera_id=str(camera_id),
+                        frame_id=frame_id,
+                        frame_shape=frame.shape[:2],
+                        matched_tracks=frame_matched_tracks  # 프레임 내에서 공유
+                    )
+                    
+                    if global_id is None:
+                        global_id = local_id
+                    else:
+                        # 새로운 매핑 저장
+                        self.local_to_global_mapping[camera_key] = global_id
+                        print(f"[DEBUG] New mapping: Local {local_id} -> Global {global_id}")
 
                 # --- 좌표 변환 ---
                 point_x = (x1 + x2) / 2
