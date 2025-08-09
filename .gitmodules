@@ -1,0 +1,3 @@
+[submodule "UnityMain"]
+	path = UnityMain
+	url = https://github.com/sooinp/smFac-Unity.git
