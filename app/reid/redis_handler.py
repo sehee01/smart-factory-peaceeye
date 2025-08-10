@@ -44,9 +44,6 @@ class FeatureStoreRedisHandler:
                                   global_frame_counter: int,
                                   local_track_id: Optional[int] = None):
         """메타데이터와 함께 feature 저장 (신규 per-cam-local 키만 사용)"""
-        # 레거시 data_key/track_key 사용부는 주석 처리
-        # data_key = self._make_track_data_key(global_id)
-        # track_key = f"global_track:{global_id}"
 
         camera_id_str = str(camera_id)
         # 신규 스키마 키를 기존 변수명인 data_key로 사용
@@ -79,9 +76,6 @@ class FeatureStoreRedisHandler:
                         feature: np.ndarray, bbox: List[int], global_frame_counter: int,
                         local_track_id: Optional[int] = None):
         """새로운 트랙 생성 (신규 per-cam-local 키만 사용)"""
-        # 레거시 트랙 키/데이터 키 저장은 주석 처리
-        # track_key = f"global_track:{global_id}"
-        # data_key = self._make_track_data_key(global_id)
 
         camera_id_str = str(camera_id)
         data_key = self._make_track_data_key(
@@ -101,10 +95,6 @@ class FeatureStoreRedisHandler:
     def create_disappeared_track(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
                                  local_track_id: Optional[int] = None):
         """사라진 객체용 새로운 트랙 생성 (신규 per-cam-local 키만 사용)"""
-        # 레거시 트랙 키/데이터 키 저장은 주석 처리
-        # track_key = f"global_track:{global_id}"
-        # data_key = self._make_track_data_key(global_id)
-
         camera_id_str = str(camera_id)
         data_key = self._make_track_data_key(
             global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
@@ -122,9 +112,6 @@ class FeatureStoreRedisHandler:
     def mark_track_as_disappeared(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
                                   local_track_id: Optional[int] = None):
         """트랙을 사라진 상태로 표시 (신규 per-cam-local 키만 사용)"""
-        # 레거시 data_key/track_key 갱신은 주석 처리
-        # data_key = self._make_track_data_key(global_id)
-        # track_key = f"global_track:{global_id}"
 
         camera_id_str = str(camera_id)
         data_key = self._make_track_data_key(
@@ -180,7 +167,7 @@ class FeatureStoreRedisHandler:
                 data_key = raw_key  # 기존 변수명 재사용
                 key_parts = data_key.decode().split(":")
                 # global_track_data:{global_id}:{camera_id}:{local_track_id}
-                if len(key_parts) != 5:
+                if len(key_parts) != 4:
                     continue
 
                 global_id = int(key_parts[1])
@@ -225,7 +212,7 @@ class FeatureStoreRedisHandler:
         for k in data_keys:
             try:
                 parts = k.decode().split(":")
-                if len(parts) != 5:
+                if len(parts) != 4:
                     continue
                 global_id = int(parts[1])
                 val = self.redis.get(k)
@@ -250,9 +237,6 @@ class FeatureStoreRedisHandler:
 
     def _remove_track(self, global_id: int):
         """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
-        # 레거시 키 삭제는 주석 처리
-        # track_key = f"global_track:{global_id}"
-        # legacy_data_key = self._make_track_data_key(global_id)
 
         new_data_keys = self.redis.keys(f"global_track_data:{global_id}:*:*")
         history_keys = self.redis.keys(f"track_history:*:{global_id}")
