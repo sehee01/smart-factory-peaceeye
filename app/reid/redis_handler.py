@@ -183,9 +183,9 @@ class FeatureStoreRedisHandler:
                 if len(key_parts) != 5:
                     continue
 
-                global_id = int(key_parts[2])
+                global_id = int(key_parts[1])
                 camera_id_str = str(camera_id)
-                key_camera = key_parts[3]
+                key_camera = key_parts[2]
                 if key_camera != camera_id_str:
                     continue
 
@@ -227,7 +227,7 @@ class FeatureStoreRedisHandler:
                 parts = k.decode().split(":")
                 if len(parts) != 5:
                     continue
-                global_id = int(parts[2])
+                global_id = int(parts[1])
                 val = self.redis.get(k)
                 if not val:
                     continue
