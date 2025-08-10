@@ -341,33 +341,13 @@ class AppOrchestrator:
         return all_detections
 
     def _extract_feature_with_extractor(self, crop_img):
-        """전문적인 feature extractor를 사용한 feature 추출 (설정에서 가져온 값 사용)"""
+        """전문적인 feature extractor를 사용한 feature 추출 (패딩 없이 resize만 사용)"""
         if crop_img.size == 0:
             return np.zeros(512)  # osnet_ibn_x1_0의 feature dimension
         
-        # 패딩을 추가한 resize 함수 (설정에서 가져온 값 사용)
+        # 패딩 없이 단순 resize
         target_size = settings.FEATURE_EXTRACTOR_CONFIG["target_size"]
-        padding_color = settings.FEATURE_EXTRACTOR_CONFIG["padding_color"]
-        
-        def resize_with_padding(image, target_size=target_size, color=padding_color):
-            h, w = image.shape[:2]
-            target_w, target_h = target_size
-            
-            scale = min(target_w / w, target_h / h)
-            new_w, new_h = int(w * scale), int(h * scale)
-            
-            resized = cv2.resize(image, (new_w, new_h))
-            
-            pad_w = (target_w - new_w) // 2
-            pad_h = (target_h - new_h) // 2
-            
-            padded = np.full((target_h, target_w, 3), color, dtype=np.uint8)
-            padded[pad_h:pad_h + new_h, pad_w:pad_w + new_w] = resized
-            
-            return padded
-        
-        # 이미지 전처리
-        resized_crop = resize_with_padding(crop_img, (128, 256))
+        resized_crop = cv2.resize(crop_img, target_size)
         normalized_crop = resized_crop.astype(np.float32) / 255.0
         
         # Feature 추출
