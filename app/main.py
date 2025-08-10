@@ -118,6 +118,11 @@ class AppOrchestrator:
                     # 기존 매핑이 있으면 사용
                     global_id = self.local_to_global_mapping[camera_key]
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                    # 기존 매핑이 있어도 feature는 계속 저장 (문제 해결)
+                    self.reid.redis.store_feature_with_metadata(
+                        global_id, str(self.camera_id), frame_id, feature, bbox, 
+                        self.reid.global_frame_counter, local_id
+                    )
                 else:
                     # 새로운 ReID 매칭 시도
                     global_id = self.reid.match_or_create(
@@ -213,7 +218,14 @@ class AppOrchestrator:
                 if camera_key in self.local_to_global_mapping:
                     # 기존 매핑이 있으면 사용
                     global_id = self.local_to_global_mapping[camera_key]
+                    
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                    
+                    # 기존 매핑이 있어도 feature는 계속 저장 (문제 해결)
+                    self.reid.redis.store_feature_with_metadata(
+                        global_id, str(camera_id), frame_id, feature, bbox, 
+                        self.reid.global_frame_counter, local_id
+                    )
                 else:
                     # 새로운 ReID 매칭 시도
                     global_id = self.reid.match_or_create(
@@ -227,7 +239,7 @@ class AppOrchestrator:
                     )
                     
                     if global_id is None:
-                        global_id = local_id
+                        global_id = local_id # 수정 필요요
                     else:
                         # 새로운 매핑 저장
                         self.local_to_global_mapping[camera_key] = global_id

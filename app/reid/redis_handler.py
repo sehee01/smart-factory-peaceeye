@@ -65,6 +65,11 @@ class FeatureStoreRedisHandler:
 
             if feature is not None:
                 track_info.setdefault('features', []).append(feature)
+                # feature 개수 제한 (최대 10개 유지)
+                max_features = 10
+                if len(track_info['features']) > max_features:
+                    # 가장 오래된 feature부터 제거 (FIFO)
+                    track_info['features'] = track_info['features'][-max_features:]
             track_info['last_seen'] = global_frame_counter
             track_info['last_bbox'] = bbox
 
