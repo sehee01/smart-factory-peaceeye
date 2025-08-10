@@ -51,7 +51,7 @@ class FeatureStoreRedisHandler:
         camera_id_str = str(camera_id)
         # 신규 스키마 키를 기존 변수명인 data_key로 사용
         data_key = self._make_track_data_key(
-            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+            global_id, camera_id_str, local_track_id
         )
 
         with self.lock:
@@ -85,7 +85,7 @@ class FeatureStoreRedisHandler:
 
         camera_id_str = str(camera_id)
         data_key = self._make_track_data_key(
-            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
+            global_id, camera_id_str, local_track_id
         )
 
         track_info = {

@@ -70,20 +70,14 @@ class GlobalReIDManager:
         
         # 1단계: 사라지는 객체 감지
         previous_bbox_area = self._get_previous_bbox_area(camera_id, frame_id)
-        is_disappearing = self.detect_disappearing_object(bbox, frame_shape, previous_bbox_area)
+        #is_disappearing = self.detect_disappearing_object(bbox, frame_shape, previous_bbox_area)
         
-        if is_disappearing:
-            print(f"Global ReID: Skipping ReID for disappearing object")
-            # 사라지는 객체는 기존 ID 유지 (ReID 스킵)
-            return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks, local_track_id)
+        # if is_disappearing:
+        #     print(f"Global ReID: Skipping ReID for disappearing object")
+        #     # 사라지는 객체는 기존 ID 유지 (ReID 스킵)
+        #     return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks, local_track_id)
         
-        # 2단계: 정상적인 ReID 매칭
-        # 특징 벡터 정규화 (0으로 나누기 방지)
-        norm = np.linalg.norm(features)
-        if norm > 0:
-            features = features / norm
-        
-        # 같은 카메라 내 매칭 (높은 우선순위)
+        # 2단계: 같은 카메라 내 매칭 (높은 우선순위) (원본 특징벡터 사용)
         same_camera_match = self._match_same_camera(features, bbox, camera_id, frame_id, matched_tracks)
         if same_camera_match:
             best_match_id, best_similarity = same_camera_match
