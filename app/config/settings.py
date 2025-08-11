@@ -7,7 +7,7 @@ YOLO_MODEL_PATH = "models/weights/bestcctv.pt"
 TRACKER_CONFIG = {
     "track_thresh": 0.5,
     "match_thresh": 0.8,
-    "track_buffer": 300,
+    "track_buffer": 3000,
     "mot20": False,
     "frame_rate": 30,
     "target_width": 640,  # 프레임 리사이즈 목표 너비
@@ -22,7 +22,7 @@ REDIS_CONFIG = {
 
 # ReID 설정 (원본의 복잡한 설정 반영)
 REID_CONFIG = {
-    "threshold": 0.5,  # 원본과 동일한 임계값
+    "threshold": 0.8,  # 원본과 동일한 임계값
     "ttl": 300,  # seconds
     "frame_rate": 30,
     "feature_ttl": 3000,  # 100초 (원본과 동일)
