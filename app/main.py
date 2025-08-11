@@ -239,7 +239,7 @@ class AppOrchestrator:
                     if global_id is None:
                         global_id = local_id # 수정 필요요
                     else:
-                        # 새로운 매핑 저장
+                        # 새로운 매핑 저장 reid 매칭에 성공
                         self.local_to_global_mapping[camera_key] = global_id
                         print(f"[DEBUG] New mapping: Local {local_id} -> Global {global_id}")
 
@@ -368,7 +368,7 @@ class AppOrchestrator:
     def _extract_feature_simple(self, crop_img):
         """단순한 RGB 평균 feature 추출 (fallback)"""
         if crop_img.size == 0:
-            return np.zeros(3)
+            return np.zeros(512)
         feature = crop_img.mean(axis=(0, 1))  # RGB 평균
         return feature / 255.0
 
