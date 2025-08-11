@@ -92,23 +92,6 @@ class FeatureStoreRedisHandler:
             self.redis.set(data_key, pickle.dumps(track_info))
             print(f"Redis: Created new track {global_id} for camera {camera_id}")
 
-    def create_disappeared_track(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
-                                 local_track_id: Optional[int] = None):
-        """사라진 객체용 새로운 트랙 생성 (신규 per-cam-local 키만 사용)"""
-        camera_id_str = str(camera_id)
-        data_key = self._make_track_data_key(
-            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
-        )
-
-        track_info = {
-            'features': [],
-            'last_seen': frame_id,
-            'last_bbox': bbox
-        }
-
-        with self.lock:
-            self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
-
     def mark_track_as_disappeared(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
                                   local_track_id: Optional[int] = None):
         """트랙을 사라진 상태로 표시 (신규 per-cam-local 키만 사용)"""

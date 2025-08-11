@@ -68,16 +68,6 @@ class GlobalReIDManager:
         if features is None or len(features) == 0:
             return None
         
-        # 1단계: 사라지는 객체 감지
-        previous_bbox_area = self._get_previous_bbox_area(camera_id, frame_id)
-        #is_disappearing = self.detect_disappearing_object(bbox, frame_shape, previous_bbox_area)
-        
-        # if is_disappearing:
-        #     print(f"Global ReID: Skipping ReID for disappearing object")
-        #     # 사라지는 객체는 기존 ID 유지 (ReID 스킵)
-        #     return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks, local_track_id)
-        
-        # 2단계: 같은 카메라 내 매칭 (높은 우선순위) (원본 특징벡터 사용)
         same_camera_match = self._match_same_camera(features, bbox, camera_id, frame_id, matched_tracks)
         if same_camera_match:
             best_match_id, best_similarity = same_camera_match
@@ -126,7 +116,7 @@ class GlobalReIDManager:
             # 위치 기반 필터링 (같은 카메라에서만) - 더 관대하게
             location_score = self._calculate_location_score(bbox, candidate_bbox)
             if location_score < 0.05:  # 더 관대하게 (0.1 -> 0.05)
-                continue
+                continue #location_score가 현재 0또는 1이여서 BBOX거리100픽셀 이상이면 매칭 안됨
             
             # 특징 유사도 계산
             if len(candidate_features) > 0:
@@ -155,6 +145,7 @@ class GlobalReIDManager:
                     print(f"[DEBUG] New best match: Track {global_id} (similarity: {feature_similarity:.3f})")
         
         if best_match_id:
+            print(f"[DEBUG]  same camera match: Track {best_match_id} (similarity: {best_similarity:.3f})")
             return best_match_id, best_similarity
         return None
 
@@ -188,6 +179,7 @@ class GlobalReIDManager:
                     best_match_id = global_id
         
         if best_match_id:
+            print(f"[DEBUG]  other camera match: Track {best_match_id} (similarity: {best_similarity:.3f})")
             return best_match_id, best_similarity
         return None
 
