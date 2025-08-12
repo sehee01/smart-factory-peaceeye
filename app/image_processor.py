@@ -1,15 +1,6 @@
 import cv2
 import numpy as np
 import torch
-import sys
-import os
-
-# deep-person-reid-master 폴더를 Python 경로에 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-deep_person_reid_path = os.path.join(project_root, "deep-person-reid-master")
-sys.path.insert(0, deep_person_reid_path)
-
 from torchreid.utils.feature_extractor import FeatureExtractor
 from config import settings
 

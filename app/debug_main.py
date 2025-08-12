@@ -25,13 +25,13 @@ for p in EXTRA_PATHS:
 if not hasattr(np, 'float'):
     np.float = float
 
-from torchreid.utils.feature_extractor import FeatureExtractor
 from detector.detector_manager import ByteTrackDetectorManager
 from reid.reid_manager import GlobalReIDManager
 from reid.redis_handler import FeatureStoreRedisHandler
 from reid.similarity import FeatureSimilarityCalculator
 from config import settings
 from models.mapping.point_transformer import transform_point
+from image_processor import ImageProcessor
 
 
 class AppOrchestrator:
@@ -50,16 +50,8 @@ class AppOrchestrator:
         # 로컬 ID와 글로벌 ID 매핑 저장소
         self.local_to_global_mapping = {}
         
-        # Feature Extractor 초기화 (설정에서 가져온 값 사용)
-        device = settings.FEATURE_EXTRACTOR_CONFIG["device"]
-        if device == "auto":
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
-        self.feature_extractor = FeatureExtractor(
-            model_name=settings.FEATURE_EXTRACTOR_CONFIG["model_name"],
-            model_path=settings.FEATURE_EXTRACTOR_CONFIG["model_path"],
-            device=device
-        )
+        # ImageProcessor 초기화 (feature 추출 책임 분리)
+        self.image_processor = ImageProcessor()
 
         # Redis 및 ReID 매니저 초기화 (공유)
         redis_handler = FeatureStoreRedisHandler(
@@ -102,16 +94,8 @@ class AppOrchestrator:
                 local_id = track["track_id"]
                 bbox = track["bbox"]
 
-                # --- Feature 추출 로직 ---
-                x1, y1, x2, y2 = map(int, bbox)
-                crop = frame[y1:y2, x1:x2]
-                
-                if self.feature_extractor is not None and crop.size > 0:
-                    # 전문적인 feature extractor 사용
-                    feature = self._extract_feature_with_extractor(crop)
-                else:
-                    # 단순한 RGB 평균 feature (fallback)
-                    feature = self._extract_feature_simple(crop)
+                # --- Feature 추출 로직 (ImageProcessor 사용) ---
+                crop, feature = self.image_processor.process_track_for_reid(frame, track)
 
                 # 로컬 ID와 글로벌 ID 매핑 확인
                 camera_key = f"{self.camera_id}_{local_id}"
@@ -142,9 +126,8 @@ class AppOrchestrator:
                         self.local_to_global_mapping[camera_key] = global_id
                         print(f"[DEBUG] New mapping: Local {local_id} -> Global {global_id}")
 
-                # --- 좌표 변환 (원본 기능 복원) ---
-                point_x = (x1 + x2) / 2
-                point_y = y1
+                # --- 좌표 변환 (ImageProcessor 사용) ---
+                x1, y1, x2, y2, point_x, point_y = self.image_processor.get_bbox_coordinates(bbox)
                 
                 try:
                     # 실제 좌표로 변환 (설정에서 가져온 매트릭스 사용)
@@ -210,14 +193,8 @@ class AppOrchestrator:
                 local_id = track["track_id"]
                 bbox = track["bbox"]
 
-                # --- Feature 추출 로직 ---
-                x1, y1, x2, y2 = map(int, bbox)
-                crop = frame[y1:y2, x1:x2]
-                
-                if self.feature_extractor is not None and crop.size > 0:
-                    feature = self._extract_feature_with_extractor(crop)
-                else:
-                    feature = self._extract_feature_simple(crop)
+                # --- Feature 추출 로직 (ImageProcessor 사용) ---
+                crop, feature = self.image_processor.process_track_for_reid(frame, track)
 
                 # 로컬 ID와 글로벌 ID 매핑 확인
                 camera_key = f"{camera_id}_{local_id}"
@@ -251,8 +228,7 @@ class AppOrchestrator:
                         print(f"[DEBUG] New mapping: Local {local_id} -> Global {global_id}")
 
                 # --- 좌표 변환 ---
-                point_x = (x1 + x2) / 2
-                point_y = y1
+                x1, y1, x2, y2, point_x, point_y = self.image_processor.get_bbox_coordinates(bbox)
                 
                 try:
                     real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
@@ -399,27 +375,7 @@ class AppOrchestrator:
         
         return all_detections
 
-    def _extract_feature_with_extractor(self, crop_img):
-        """전문적인 feature extractor를 사용한 feature 추출 (패딩 없이 resize만 사용)"""
-        if crop_img.size == 0:
-            return np.zeros(512)  # osnet_ibn_x1_0의 feature dimension
-        
-        # 패딩 없이 단순 resize
-        target_size = settings.FEATURE_EXTRACTOR_CONFIG["target_size"]
-        resized_crop = cv2.resize(crop_img, target_size)
-        normalized_crop = resized_crop.astype(np.float32) / 255.0
-        
-        # Feature 추출
-        with torch.no_grad():
-            feature = self.feature_extractor([normalized_crop]).cpu().numpy()
-            return feature.flatten()
 
-    def _extract_feature_simple(self, crop_img):
-        """단순한 RGB 평균 feature 추출 (fallback)"""
-        if crop_img.size == 0:
-            return np.zeros(512)
-        feature = crop_img.mean(axis=(0, 1))  # RGB 평균
-        return feature / 255.0
 
 
 def main():
