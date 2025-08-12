@@ -48,32 +48,41 @@ class GlobalReIDManager:
         """
         if matched_tracks is None:
             matched_tracks = set()
-        
+
+        best_match_id_same_camera = None
+        best_match_id_other_camera = None
+        best_similarity_same_camera = 0
+        best_similarity_other_camera = 0
+
         if features is None or len(features) == 0:
             return None
         
         same_camera_match = self._match_same_camera(features, bbox, camera_id, frame_id, matched_tracks)
         if same_camera_match:
-            best_match_id, best_similarity = same_camera_match
-            print(f"Global ReID: Same camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
-            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id, local_track_id)
-            matched_tracks.add(best_match_id)
-            return best_match_id
+            best_match_id_same_camera, best_similarity_same_camera = same_camera_match
+            print(f"Global ReID: Same camera match - Track {best_match_id_same_camera} (similarity: {best_similarity_same_camera:.3f})")
+            self._update_track_camera(best_match_id_same_camera, features, bbox, camera_id, frame_id, local_track_id)
+            matched_tracks.add(best_match_id_same_camera)
+            # return best_match_id
         
         # 다른 카메라 매칭 (낮은 우선순위)
         other_camera_match = self._match_other_cameras(features, bbox, camera_id, frame_id, matched_tracks)
         if other_camera_match:
-            best_match_id, best_similarity = other_camera_match
-            print(f"Global ReID: Cross camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
-            self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id, local_track_id)
-            matched_tracks.add(best_match_id)
-            return best_match_id
-        
-        # 새로운 글로벌 ID 생성
-        global_id = self.redis.generate_new_global_id()
-        self._create_track(global_id, features, bbox, camera_id, frame_id, local_track_id)
-        print(f"Global ReID: Created new track {global_id}")
-        return global_id
+            best_match_id_other_camera, best_similarity_other_camera = other_camera_match
+            print(f"Global ReID: Cross camera match - Track {best_match_id_other_camera} (similarity: {best_similarity_other_camera:.3f})")
+            self._update_track_camera(best_match_id_other_camera, features, bbox, camera_id, frame_id, local_track_id)
+            matched_tracks.add(best_match_id_other_camera)
+            # return best_match_id
+        if best_similarity_same_camera > best_similarity_other_camera:
+            return best_match_id_same_camera
+        elif best_similarity_other_camera > best_similarity_same_camera:
+            return best_match_id_other_camera
+        else:
+            # 새로운 글로벌 ID 생성
+            global_id = self.redis.generate_new_global_id()
+            self._create_track(global_id, features, bbox, camera_id, frame_id, local_track_id)
+            print(f"Global ReID: Created new track {global_id}")
+            return global_id
 
     def _get_previous_bbox_area(self, camera_id: str, frame_id: int) -> Optional[float]:
         """이전 프레임의 바운딩 박스 크기 가져오기"""
