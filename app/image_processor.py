@@ -1,6 +1,15 @@
 import cv2
 import numpy as np
 import torch
+import sys
+from pathlib import Path
+
+# torchreid 모듈 경로 추가
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+TORCHREID_PATH = str(PROJECT_ROOT / "deep-person-reid-master")
+if TORCHREID_PATH not in sys.path:
+    sys.path.insert(0, TORCHREID_PATH)
+
 from torchreid.utils.feature_extractor import FeatureExtractor
 from config import settings
 

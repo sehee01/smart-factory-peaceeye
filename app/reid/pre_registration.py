@@ -8,7 +8,19 @@ from typing import List, Dict, Optional
 from ultralytics import YOLO
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+
+# app 디렉토리 경로 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(current_dir)
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+# torchreid 모듈 경로 추가
+PROJECT_ROOT = Path(app_dir).parent
+TORCHREID_PATH = str(PROJECT_ROOT / "deep-person-reid-master")
+if TORCHREID_PATH not in sys.path:
+    sys.path.insert(0, TORCHREID_PATH)
 
 from image_processor import ImageProcessor
 from config import settings
