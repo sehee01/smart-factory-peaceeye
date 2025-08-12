@@ -92,30 +92,6 @@ class FeatureStoreRedisHandler:
             self.redis.set(data_key, pickle.dumps(track_info))
             print(f"Redis: Created new track {global_id} for camera {camera_id}")
 
-    def mark_track_as_disappeared(self, global_id: int, bbox: List[int], camera_id: str, frame_id: int,
-                                  local_track_id: Optional[int] = None):
-        """트랙을 사라진 상태로 표시 (신규 per-cam-local 키만 사용)"""
-
-        camera_id_str = str(camera_id)
-        data_key = self._make_track_data_key(
-            global_id, camera_id_str, local_track_id #if local_track_id is not None else 0
-        )
-
-        with self.lock:
-            track_data = self.redis.get(data_key)
-            if track_data:
-                track_info = pickle.loads(track_data)
-                if not isinstance(track_info, dict):
-                    track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
-            else:
-                track_info = {'features': [], 'last_seen': 0, 'last_bbox': [0, 0, 0, 0]}
-
-            track_info['last_seen'] = frame_id
-            track_info['last_bbox'] = bbox
-
-            # 사라진 객체: TTL 적용 (신규 키)
-            self.redis.setex(data_key, self.feature_ttl, pickle.dumps(track_info))
-
     def get_candidate_features(self, exclude_camera: str = None) -> Dict[int, np.ndarray]:
         """기본 candidate features 조회 (하위 호환성)"""
         result = {}
@@ -217,22 +193,6 @@ class FeatureStoreRedisHandler:
             if global_frame_counter - max_last_seen > ttl:
                 self._remove_track(gid)
                 print(f"Redis: Expired track {gid}")
-
-    def _deserialize_data(self, data: bytes) -> any:
-        """
-        Redis에서 가져온 바이너리 데이터를 역직렬화
-        
-        Args:
-            data: Redis에서 가져온 바이너리 데이터
-            
-        Returns:
-            역직렬화된 데이터
-        """
-        try:
-            return pickle.loads(data)
-        except Exception as e:
-            print(f"[Redis] 데이터 역직렬화 실패: {str(e)}")
-            return None
 
     def _remove_track(self, global_id: int):
         """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
