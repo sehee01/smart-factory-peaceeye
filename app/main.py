@@ -39,29 +39,29 @@ class AppOrchestrator:
     멀티스레딩 지원으로 여러 비디오를 동시에 처리
     """
 
-    def __init__(self, model_path: str, tracker_config: dict, redis_conf: dict, reid_conf: dict):
-        # 공유 컴포넌트들
-        self.model_path = model_path
-        self.tracker_config = tracker_config
-        self.redis_conf = redis_conf
-        self.reid_conf = reid_conf
+    def __init__(self, video_paths=None):
+        # 설정 로드
+        self.model_path = settings.YOLO_MODEL_PATH
+        self.tracker_config = settings.TRACKER_CONFIG
+        redis_conf = settings.REDIS_CONFIG
+        reid_conf = settings.REID_CONFIG
+
+        # Redis 핸들러 초기화
+        redis_handler = FeatureStoreRedisHandler(
+            redis_host=redis_conf.get("host", "localhost"),
+            redis_port=redis_conf.get("port", 6379)
+        )
+        similarity = FeatureSimilarityCalculator()
+        self.reid = GlobalReIDManager(redis_handler, similarity, similarity_threshold=reid_conf.get("threshold", 0.7))
+
+        # 단일 카메라 모드용 기본 카메라 ID 설정
+        self.default_camera_id = "camera_0"  # 명시적으로 설정
         
         # 로컬 ID와 글로벌 ID 매핑 저장소
         self.local_to_global_mapping = {}
         
         # 이미지 처리기 초기화
         self.image_processor = ImageProcessor()
-
-        # Redis 및 ReID 매니저 초기화 (공유)
-        redis_handler = FeatureStoreRedisHandler(
-            redis_host=redis_conf.get("host", "localhost"),
-            redis_port=redis_conf.get("port", 6379),
-            feature_ttl=reid_conf.get("ttl", 300)
-        )
-        similarity = FeatureSimilarityCalculator()
-        self.reid = GlobalReIDManager(redis_handler, similarity, similarity_threshold=reid_conf.get("threshold", 0.7))
-
-        self.camera_id = redis_conf.get("camera_id", "cam01")
 
     def create_detector_for_thread(self):
         """스레드별 독립적인 detector 생성"""
@@ -97,21 +97,21 @@ class AppOrchestrator:
                 crop, feature = self.image_processor.process_track_for_reid(frame, track)
 
                 # 로컬 ID와 글로벌 ID 매핑 확인
-                camera_key = f"{self.camera_id}_{local_id}"
+                camera_key = f"{self.default_camera_id}_{local_id}"
                 if camera_key in self.local_to_global_mapping:
                     # 기존 매핑이 있으면 사용
                     global_id = self.local_to_global_mapping[camera_key]
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
                     # ReID 매니저를 통해 업데이트 (Redis 상태 일관성 유지)
                     self.reid._update_track_camera(
-                        global_id, feature, bbox, self.camera_id, frame_id, local_id
+                        global_id, feature, bbox, self.default_camera_id, frame_id, local_id
                     )
                 else:
                     # 새로운 ReID 매칭 시도
                     global_id = self.reid.match_or_create(
                         features=feature,
                         bbox=bbox,
-                        camera_id=self.camera_id,
+                        camera_id=self.default_camera_id,
                         frame_id=frame_id,
                         frame_shape=frame.shape[:2],
                         matched_tracks=frame_matched_tracks,  # 프레임 내에서 공유
@@ -135,7 +135,7 @@ class AppOrchestrator:
                     real_x, real_y = point_x, point_y #테스트시 연산 최소화 위한 옵션
                     # real_x, real_y = transform_point(point_x, point_y, settings.HOMOGRAPHY_MATRIX)
                     
-                    print(f"[DEBUG] Camera {self.camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
+                    print(f"[DEBUG] Camera {self.default_camera_id}, Worker {global_id}: Image({point_x:.1f}, {point_y:.1f}) -> Real({real_x:.4f}, {real_y:.4f})")
                 except Exception as e:
                     print(f"Warning: Coordinate transformation failed: {e}")
                     real_x, real_y = point_x, point_y
@@ -381,10 +381,7 @@ def main():
     }
 
     app = AppOrchestrator(
-        model_path=args.yolo_model,
-        tracker_config=tracker_config,
-        redis_conf=redis_conf,
-        reid_conf=reid_config
+        video_paths=args.videos
     )
 
     if args.multi_thread and len(args.videos) > 1:
