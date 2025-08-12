@@ -3,6 +3,7 @@ import pickle
 import threading
 import numpy as np
 from typing import List, Dict, Optional
+from config import settings
 
 
 class FeatureStoreRedisHandler:
@@ -12,11 +13,27 @@ class FeatureStoreRedisHandler:
     원본의 복잡한 기능을 지원: 메타데이터 저장, 카메라별 조회, 사라진 객체 관리
     """
 
-    def __init__(self, redis_host='localhost', redis_port=6379, feature_ttl=300):
+    def __init__(self, redis_host=None, redis_port=None, feature_ttl=None):
+        # 글로벌 Redis 연결 설정 사용
+        if redis_host is None:
+            redis_host = settings.REDIS_CONFIG["host"]
+        if redis_port is None:
+            redis_port = settings.REDIS_CONFIG["port"]
+            
+        # ReID 전용 TTL 설정 사용
+        if feature_ttl is None:
+            feature_ttl = settings.REID_CONFIG["redis"]["feature_ttl"]
+            
         self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=False)
         self.feature_ttl = feature_ttl
         self.lock = threading.Lock()
         self.global_id_counter_key = "global_track_id_counter"
+        
+        # ReID 전용 Redis 설정 가져오기
+        self.track_ttl = settings.REID_CONFIG["redis"]["track_ttl"]
+        self.max_features_per_track = settings.REID_CONFIG["redis"]["max_features_per_track"]
+        self.pre_registration_ttl = settings.REID_CONFIG["redis"]["pre_registration_ttl"]
+        self.cleanup_buffer = settings.REID_CONFIG["redis"]["cleanup_buffer"]
 
     def _make_track_key(self, global_id: int, camera_id: str, local_track_id: int) -> str:
         return f"global_track:{global_id}:{camera_id}:{local_track_id}"
@@ -62,11 +79,10 @@ class FeatureStoreRedisHandler:
 
             if feature is not None:
                 track_info.setdefault('features', []).append(feature)
-                # feature 개수 제한 (최대 10개 유지)
-                max_features = 10
-                if len(track_info['features']) > max_features:
+                # feature 개수 제한 (설정값 사용)
+                if len(track_info['features']) > self.max_features_per_track:
                     # 가장 오래된 feature부터 제거 (FIFO)
-                    track_info['features'] = track_info['features'][-max_features:]
+                    track_info['features'] = track_info['features'][-self.max_features_per_track:]
             track_info['last_seen'] = global_frame_counter
             track_info['last_bbox'] = bbox
 
@@ -91,6 +107,32 @@ class FeatureStoreRedisHandler:
         with self.lock:
             self.redis.set(data_key, pickle.dumps(track_info))
             print(f"Redis: Created new track {global_id} for camera {camera_id}")
+
+    def create_pre_registered_track(self, global_id: int, camera_id: str, frame_id: int,
+                                   feature: np.ndarray, bbox: List[int], 
+                                   local_track_id: Optional[int] = None):
+        """
+        사전 등록된 Global ID로 새로운 track 생성
+        다른 track들과 동일한 구조로 생성하여 통합 관리
+        """
+        try:
+            camera_id_str = str(camera_id)
+            data_key = self._make_track_data_key(
+                global_id, camera_id_str, local_track_id
+            )
+
+            track_info = {
+                'features': [feature] if feature is not None else [],
+                'last_seen': frame_id,
+                'last_bbox': bbox
+            }
+
+            with self.lock:
+                self.redis.set(data_key, pickle.dumps(track_info))
+                print(f"Redis: Created pre-registered track {global_id} for camera {camera_id}, local_track {local_track_id}")
+                
+        except Exception as e:
+            print(f"Redis: Failed to create pre-registered track: {str(e)}")
 
     def get_candidate_features(self, exclude_camera: str = None) -> Dict[int, np.ndarray]:
         """기본 candidate features 조회 (하위 호환성)"""
@@ -187,9 +229,9 @@ class FeatureStoreRedisHandler:
             except Exception:
                 continue
 
-        # 활성 객체는 TTL*2, 사라진 상태 플래그는 신규 스키마에 없으므로 모두 활성로 간주
+        # 활성 객체는 TTL * cleanup_buffer, 사라진 상태 플래그는 신규 스키마에 없으므로 모두 활성로 간주
         for gid, max_last_seen in max_seen_by_global.items():
-            ttl = ttl_frames * 2
+            ttl = ttl_frames * self.cleanup_buffer
             if global_frame_counter - max_last_seen > ttl:
                 self._remove_track(gid)
                 print(f"Redis: Expired track {gid}")
