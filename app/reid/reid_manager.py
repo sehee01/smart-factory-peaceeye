@@ -29,22 +29,6 @@ class GlobalReIDManager:
         self.global_frame_counter = max(self.global_frame_counter, frame_id)
         self.redis.cleanup_expired_tracks(self.global_frame_counter, self.feature_ttl)
 
-    def detect_disappearing_object(self, bbox: List[int], frame_shape: tuple, previous_bbox_area: Optional[float] = None) -> bool:
-        """객체가 화면에서 사라지는지 감지"""
-        x1, y1, x2, y2 = bbox
-        frame_height, frame_width = frame_shape
-        
-        # 바운딩 박스가 화면 경계에 닿는지 확인
-        touching_boundary = (x1 <= 0 or y1 <= 0 or x2 >= frame_width or y2 >= frame_height)
-        
-        # 바운딩 박스 크기가 급격히 작아지는지 확인
-        bbox_area = (x2 - x1) * (y2 - y1)
-        is_shrinking = False
-        if previous_bbox_area:
-            is_shrinking = bbox_area < previous_bbox_area * 0.5
-        
-        return touching_boundary or is_shrinking
-
     def match_or_create(self, features: np.ndarray, bbox: List[int], camera_id: str,
                         frame_id: int, frame_shape: tuple, matched_tracks: Optional[Set[int]] = None,
                         local_track_id: Optional[int] = None) -> Optional[int]:
@@ -212,45 +196,6 @@ class GlobalReIDManager:
             global_id, camera_id, frame_id, features, bbox,
             self.global_frame_counter, local_track_id
         )
-
-    def _get_existing_id_for_disappearing_object(self, bbox: List[int], camera_id: str,
-                                                 frame_id: int, matched_tracks: Set[int],
-                                                 local_track_id: Optional[int] = None) -> Optional[int]:
-        """사라지는 객체의 기존 ID를 찾아서 반환"""
-        candidates = self.redis.get_candidate_features_by_camera(camera_id)
-        best_match_id = None
-        min_distance = float('inf')
-        
-        for global_id, candidate_data in candidates.items():
-            if global_id in matched_tracks:
-                continue
-            
-            candidate_bbox = candidate_data.get('bbox', bbox)
-            
-            # 위치 기반으로 가장 가까운 트랙 찾기
-            current_center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
-            last_center = [(candidate_bbox[0] + candidate_bbox[2]) / 2, 
-                          (candidate_bbox[1] + candidate_bbox[3]) / 2]
-            distance = np.sqrt((current_center[0] - last_center[0])**2 + 
-                             (current_center[1] - last_center[1])**2)
-            
-            # 사라지는 객체는 더 관대한 거리 제한
-            if distance < 300 and distance < min_distance:
-                min_distance = distance
-                best_match_id = global_id
-        
-        if best_match_id is not None:
-            print(f"Global ReID: Found existing ID {best_match_id} for disappearing object (distance: {min_distance:.1f})")
-            # 기존 트랙을 사라진 상태로 업데이트
-            self.redis.mark_track_as_disappeared(best_match_id, bbox, camera_id, frame_id)
-            matched_tracks.add(best_match_id)
-            return best_match_id
-        
-        # 기존 ID를 찾지 못한 경우 새로운 사라진 트랙 생성
-        global_id = self.redis.generate_new_global_id()
-        print(f"Global ReID: Created new disappeared ID {global_id} for disappearing object")
-        self.redis.create_disappeared_track(global_id, bbox, camera_id, frame_id, local_track_id)
-        return global_id
 
     def reassign_global_id(self, camera_id: str, local_track_id: int, feature: np.ndarray) -> int:
         """
