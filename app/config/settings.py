@@ -1,7 +1,7 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/bestcctv.pt"
+YOLO_MODEL_PATH = "models/weights/yolo11m.pt"
 
 # BYTETracker 설정 (원본과 동일)
 TRACKER_CONFIG = {
@@ -9,7 +9,7 @@ TRACKER_CONFIG = {
     "match_thresh": 0.8,
     "track_buffer": 3000,
     "mot20": False,
-    "frame_rate": 30,
+    "frame_rate": 15,
     "target_width": 640,  # 프레임 리사이즈 목표 너비
 }
 
@@ -24,15 +24,15 @@ REDIS_CONFIG = {
 REID_CONFIG = {
     "threshold": 0.8,  # 원본과 동일한 임계값
     "ttl": 300,  # seconds
-    "frame_rate": 30,
+    "frame_rate": 15,
     "feature_ttl": 3000,  # 100초 (원본과 동일)
     "similarity_threshold": 0.3,  # 더 관대한 매칭을 위해 낮춤
 }
 
 # 입력 비디오 경로 (원본과 동일)
 VIDEO_INPUT_PATHS = [
-    "test_video/KSEB02.mp4",
-    "test_video/KSEB03.mp4"
+    "test_video/final01.mp4",
+    "test_video/final02.mp4"
 ]
 
 # 좌표 변환 매트릭스 (원본과 동일)

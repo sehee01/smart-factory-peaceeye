@@ -173,21 +173,34 @@ class AppOrchestrator:
         detector = self.create_detector_for_thread()
         
         cap = cv2.VideoCapture(video_path)
-        frame_id = 0
+        frame_id = 0  # 원본 비디오의 실제 프레임 번호
+        processed_frame_id = 0  # 실제 처리된 프레임의 순차적 번호
 
+        # 프레임 스킵 설정
+        target_fps = 15  # 목표 FPS
+        frame_skip = 30/target_fps # 스킵할 프레임 수
+        
         while cap.isOpened() and not stop_event.is_set():
             ret, frame = cap.read()
             if not ret:
                 print(f"[{video_path}] Video ended")
                 break
 
-            frame_id += 1
+            frame_id += 1  # 원본 프레임 번호 증가
+
+            # 프레임 스킵: frame_skip 프레임마다 하나씩만 처리
+            if frame_id % frame_skip != 0:
+                print(f"[DEBUG] Skipping frame {frame_id}")
+                continue  # 이 프레임은 스킵
             
-            # 글로벌 ReID 매니저 프레임 업데이트
-            self.reid.update_frame(frame_id)
+            processed_frame_id += 1  # 처리된 프레임 번호 증가
+            print(f"[DEBUG] Processing frame {frame_id} -> processed_frame_id {processed_frame_id}")
             
-            # 원본의 복잡한 탐지 로직 사용
-            track_list = detector.detect_and_track(frame, frame_id)
+            # 글로벌 ReID 매니저 프레임 업데이트 (processed_frame_id 사용)
+            self.reid.update_frame(processed_frame_id)
+            
+            # 원본의 복잡한 탐지 로직 사용 (processed_frame_id 사용)
+            track_list = detector.detect_and_track(frame, processed_frame_id)
 
             # 프레임별 매칭된 트랙 추적
             frame_matched_tracks = set()
@@ -214,19 +227,19 @@ class AppOrchestrator:
                     
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
                     
-                    # ReID 매니저를 통해 업데이트 (Redis 상태 일관성 유지)
+                    # ReID 매니저를 통해 업데이트 (frame_id 사용 - 원본 프레임 번호)
                     self.reid._update_track_camera(
                         global_id, feature, bbox, str(camera_id), frame_id, local_id
                     )
                 else:
-                    # 새로운 ReID 매칭 시도
+                    # 새로운 ReID 매칭 시도 (frame_id 사용 - 원본 프레임 번호)
                     global_id = self.reid.match_or_create(
                         features=feature,
                         bbox=bbox,
                         camera_id=str(camera_id),
-                        frame_id=frame_id,
+                        frame_id=frame_id,  # 원본 프레임 번호
                         frame_shape=frame.shape[:2],
-                        matched_tracks=frame_matched_tracks,  # 프레임 내에서 공유
+                        matched_tracks=frame_matched_tracks,
                         local_track_id=local_id
                     )
                     
@@ -248,13 +261,13 @@ class AppOrchestrator:
                     print(f"Warning: Coordinate transformation failed: {e}")
                     real_x, real_y = point_x, point_y
 
-                # JSON 데이터 생성
+                # JSON 데이터 생성 (processed_frame_id 사용 - 처리된 프레임 번호)
                 detection_data = {
                     "cameraID": int(camera_id),
                     "workerID": int(global_id),
                     "position_X": real_x,
                     "position_Y": real_y,
-                    "frame_id": frame_id
+                    "frame_id": processed_frame_id  # 처리된 프레임 번호
                 }
                 frame_detections_json.append(detection_data)
 
@@ -262,24 +275,24 @@ class AppOrchestrator:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f'ID:{global_id}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-            # 프레임 데이터를 버퍼에 저장
+            # 프레임 데이터를 버퍼에 저장 (processed_frame_id 사용)
             frame_data = {
                 'video_path': video_path,
                 'frame': frame,
                 'detections': frame_detections_json,
-                'frame_id': frame_id
+                'frame_id': processed_frame_id  # 처리된 프레임 번호
             }
             
             # 동기화: 메인 스레드가 처리할 준비가 될 때까지 대기
             frame_buffer.put(frame_data)
             
             # 메인 스레드의 처리 완료 신호 대기
-            sync_event.wait()
+            sync_event.wait(0.1)
             sync_event.clear()  # 이벤트 리셋
 
         cap.release()
         # 종료 신호 전송
-        frame_buffer.put({'video_path': video_path, 'frame': None, 'detections': None, 'frame_id': -1})
+        frame_buffer.put({'video_path': video_path, 'frame': None, 'detections': None, 'frame_id': -1}) 
 
     def run_multi_video(self, video_paths):
         """동기화된 멀티 비디오 처리"""
@@ -324,7 +337,7 @@ class AppOrchestrator:
             
             for video_path in active_videos.copy():
                 try:
-                    frame_data = frame_buffers[video_path].get(timeout=0.1)  # 100ms 타임아웃
+                    frame_data = frame_buffers[video_path].get(timeout=0.01)  # 10ms 타임아웃
                     
                     if frame_data['frame'] is None:
                         # 비디오 종료 신호
