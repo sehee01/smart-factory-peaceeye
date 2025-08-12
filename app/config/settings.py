@@ -30,7 +30,7 @@ REID_CONFIG = {
     
     # 사전 등록 매칭 설정
     "pre_registration": {
-        "similarity_threshold": 0.9,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
+        "similarity_threshold": 0.65,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
         "min_matching_features": 2,      # 최소 매칭되어야 할 feature 개수 (1~5 권장)
         "max_features_per_id": 10,       # Global ID당 최대 feature 개수 (고정값)
     },

@@ -2,6 +2,16 @@ import numpy as np
 from typing import Optional, Set, Dict, Any, List
 from ..redis_handler import FeatureStoreRedisHandler
 from ..similarity import FeatureSimilarityCalculator
+import sys
+import os
+
+# app 디렉토리 경로 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.dirname(os.path.dirname(current_dir))
+if app_dir not in sys.path:
+    sys.path.insert(0, app_dir)
+
+from config import settings
 
 
 class SameCameraMatcher:

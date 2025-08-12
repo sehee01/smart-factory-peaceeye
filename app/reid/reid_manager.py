@@ -76,44 +76,64 @@ class GlobalReIDManager:
         best_similarity_other_camera = 0
 
         if features is None or len(features) == 0:
+            print("[DEBUG] Features가 None이거나 비어있음")
             return None
         
+        print(f"[DEBUG] === ReID 매칭 시작 ===")
+        print(f"[DEBUG] Camera: {camera_id}, Frame: {frame_id}, Local Track: {local_track_id}")
+        print(f"[DEBUG] Feature 차원: {features.shape}, Feature 값 범위: {features.min():.4f} ~ {features.max():.4f}")
+        
         # 1. 사전 등록 기반 매칭 시도 (최우선)
+        print(f"[DEBUG] 1단계: 사전 등록 기반 매칭 시도")
         pre_reg_match = self.pre_reg_matcher.match(features)
         if pre_reg_match:
-            print(f"Global ReID: Pre-registration match - Track {pre_reg_match}")
+            print(f"[DEBUG] ✅ 사전 등록 매칭 성공: Global ID {pre_reg_match}")
             # 사전 등록된 Global ID로 새로운 track 생성
             self.redis.create_pre_registered_track(pre_reg_match, camera_id, frame_id, 
                                                  features, bbox, local_track_id)
             matched_tracks.add(pre_reg_match)
             return pre_reg_match
+        else:
+            print(f"[DEBUG] ❌ 사전 등록 매칭 실패")
         
         # 2. 같은 카메라 내 매칭
+        print(f"[DEBUG] 2단계: 같은 카메라 내 매칭 시도")
         same_camera_match = self.same_camera_matcher.match(features, bbox, camera_id, frame_id, matched_tracks)
         if same_camera_match:
             best_match_id_same_camera, best_similarity_same_camera = same_camera_match
-            print(f"Global ReID: Same camera match - Track {best_match_id_same_camera} (similarity: {best_similarity_same_camera:.3f})")
+            print(f"[DEBUG] ✅ 같은 카메라 매칭 성공: Global ID {best_match_id_same_camera} (similarity: {best_similarity_same_camera:.3f})")
             self._update_track_camera(best_match_id_same_camera, features, bbox, camera_id, frame_id, local_track_id)
             matched_tracks.add(best_match_id_same_camera)
+        else:
+            print(f"[DEBUG] ❌ 같은 카메라 매칭 실패")
         
         # 3. 다른 카메라 매칭 (낮은 우선순위)
+        print(f"[DEBUG] 3단계: 다른 카메라 매칭 시도")
         other_camera_match = self.cross_camera_matcher.match(features, bbox, camera_id, frame_id, matched_tracks)
         if other_camera_match:
             best_match_id_other_camera, best_similarity_other_camera = other_camera_match
-            print(f"Global ReID: Cross camera match - Track {best_match_id_other_camera} (similarity: {best_similarity_other_camera:.3f})")
+            print(f"[DEBUG] ✅ 다른 카메라 매칭 성공: Global ID {best_match_id_other_camera} (similarity: {best_similarity_other_camera:.3f})")
             self._update_track_camera(best_match_id_other_camera, features, bbox, camera_id, frame_id, local_track_id)
             matched_tracks.add(best_match_id_other_camera)
+        else:
+            print(f"[DEBUG] ❌ 다른 카메라 매칭 실패")
         
         # 4. 최종 매칭 결과 결정
+        print(f"[DEBUG] 4단계: 최종 매칭 결과 결정")
+        print(f"[DEBUG] 같은 카메라: {best_match_id_same_camera} (similarity: {best_similarity_same_camera:.3f})")
+        print(f"[DEBUG] 다른 카메라: {best_match_id_other_camera} (similarity: {best_similarity_other_camera:.3f})")
+        
         if best_similarity_same_camera > best_similarity_other_camera:
+            print(f"[DEBUG] ✅ 최종 선택: 같은 카메라 매칭 (Global ID: {best_match_id_same_camera})")
             return best_match_id_same_camera
         elif best_similarity_other_camera > best_similarity_same_camera:
+            print(f"[DEBUG] ✅ 최종 선택: 다른 카메라 매칭 (Global ID: {best_match_id_other_camera})")
             return best_match_id_other_camera
         else:
             # 새로운 글로벌 ID 생성
             global_id = self.redis.generate_new_global_id()
+            print(f"[DEBUG] ✅ 새로운 Global ID 생성: {global_id}")
             self._create_track(global_id, features, bbox, camera_id, frame_id, local_track_id)
-            print(f"Global ReID: Created new track {global_id}")
             return global_id
 
     def _update_track_camera(self, global_id: int, features: np.ndarray, bbox: List[int],
