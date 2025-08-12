@@ -8,6 +8,7 @@ import threading
 import queue
 import argparse
 import time
+from performance_logger import PerformanceLogger
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXTRA_PATHS = [
@@ -63,6 +64,9 @@ class AppOrchestrator:
         self.reid = GlobalReIDManager(redis_handler, similarity, similarity_threshold=reid_conf.get("threshold", 0.7))
 
         self.camera_id = redis_conf.get("camera_id", "cam01")
+        
+        # 스레드별 성능 로거 저장소
+        self.thread_performance_loggers = {}
 
     def create_detector_for_thread(self):
         """스레드별 독립적인 detector 생성"""
@@ -71,6 +75,11 @@ class AppOrchestrator:
     def run_video(self, video_path):
         """단일 비디오 처리 (기존 메서드)"""
         detector = self.create_detector_for_thread()
+        
+        # 단일 비디오용 성능 로거 생성
+        video_logger = PerformanceLogger(output_dir="result/single_video")
+        self.thread_performance_loggers[0] = video_logger
+        
         cap = cv2.VideoCapture(video_path)
         frame_id = 0
 
@@ -81,14 +90,28 @@ class AppOrchestrator:
 
             frame_id += 1
             
+            # 성능 측정 시작
+            video_logger.start_frame_timing(frame_id, 0)  # 단일 비디오는 카메라 ID 0
+            
             # 글로벌 ReID 매니저 프레임 업데이트
             self.reid.update_frame(frame_id)
             
+            # 탐지 및 트래킹 타이밍 시작
+            video_logger.start_detection_timing()
+            video_logger.start_tracking_timing()
+            
             # 원본의 복잡한 탐지 로직 사용
             track_list = detector.detect_and_track(frame, frame_id)
+            
+            # 탐지 및 트래킹 타이밍 종료
+            video_logger.end_detection_timing()
+            video_logger.end_tracking_timing()
 
             # 프레임별 매칭된 트랙 추적
             frame_matched_tracks = set()
+            
+            # 객체 수 설정
+            video_logger.set_object_count(len(track_list))
 
             for track in track_list:
                 local_id = track["track_id"]
@@ -100,15 +123,24 @@ class AppOrchestrator:
                 # 로컬 ID와 글로벌 ID 매핑 확인
                 camera_key = f"{self.camera_id}_{local_id}"
                 if camera_key in self.local_to_global_mapping:
-                    # 기존 매핑이 있으면 사용
+                    # 기존 매핑이 있으면 사용 (같은 카메라 내 ReID)
                     global_id = self.local_to_global_mapping[camera_key]
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                    
+                    # 같은 카메라 내 ReID 타이밍 시작
+                    video_logger.start_same_camera_reid_timing()
+                    
                     # ReID 매니저를 통해 업데이트 (Redis 상태 일관성 유지)
                     self.reid._update_track_camera(
                         global_id, feature, bbox, self.camera_id, frame_id, local_id
                     )
+                    
+                    # 같은 카메라 내 ReID 타이밍 종료
+                    video_logger.end_same_camera_reid_timing()
                 else:
-                    # 새로운 ReID 매칭 시도
+                    # 새로운 ReID 매칭 시도 (다른 카메라 간 ReID)
+                    video_logger.start_cross_camera_reid_timing()
+                    
                     global_id = self.reid.match_or_create(
                         features=feature,
                         bbox=bbox,
@@ -118,6 +150,9 @@ class AppOrchestrator:
                         matched_tracks=frame_matched_tracks,  # 프레임 내에서 공유
                         local_track_id=local_id
                     )
+                    
+                    # 다른 카메라 간 ReID 타이밍 종료
+                    video_logger.end_cross_camera_reid_timing()
                     
                     if global_id is None:
                         global_id = local_id  # 매칭 실패 시 로컬 ID 사용
@@ -144,6 +179,9 @@ class AppOrchestrator:
                 cv2.putText(frame, f"ID: {global_id}", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
+            # 성능 데이터 로깅
+            video_logger.log_frame_performance()
+
             cv2.imshow("Tracking", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -155,12 +193,16 @@ class AppOrchestrator:
         """프레임 수집 전용 스레드 (동기화됨)"""
         detector = self.create_detector_for_thread()
         
+        # 스레드별 독립적인 성능 로거 생성
+        thread_logger = PerformanceLogger(output_dir=f"result/camera_{camera_id}")
+        self.thread_performance_loggers[camera_id] = thread_logger
+        
         cap = cv2.VideoCapture(video_path)
         frame_id = 0  # 원본 비디오의 실제 프레임 번호
         processed_frame_id = 0  # 실제 처리된 프레임의 순차적 번호
 
         # 프레임 스킵 설정
-        target_fps = 15  # 목표 FPS
+        target_fps = 30  # 목표 FPS
         frame_skip = 30/target_fps # 스킵할 프레임 수
         
         while cap.isOpened() and not stop_event.is_set():
@@ -179,16 +221,31 @@ class AppOrchestrator:
             processed_frame_id += 1  # 처리된 프레임 번호 증가
             print(f"[DEBUG] Processing frame {frame_id} -> processed_frame_id {processed_frame_id}")
             
+            # 성능 측정 시작
+            thread_logger.start_frame_timing(processed_frame_id, camera_id)
+            
             # 글로벌 ReID 매니저 프레임 업데이트 (processed_frame_id 사용)
             self.reid.update_frame(processed_frame_id)
             
+            # 탐지 및 트래킹 타이밍 시작
+            thread_logger.start_detection_timing()
+            thread_logger.start_tracking_timing()
+            
             # 원본의 복잡한 탐지 로직 사용 (processed_frame_id 사용)
             track_list = detector.detect_and_track(frame, processed_frame_id)
+            
+            # 탐지 및 트래킹 타이밍 종료
+            thread_logger.end_detection_timing()
+            thread_logger.end_tracking_timing()
 
             # 프레임별 매칭된 트랙 추적
             frame_matched_tracks = set()
             
             frame_detections_json = []
+            
+            # 객체 수 설정
+            thread_logger.set_object_count(len(track_list))
+            
             for track in track_list:
                 local_id = track["track_id"]
                 bbox = track["bbox"]
@@ -199,17 +256,25 @@ class AppOrchestrator:
                 # 로컬 ID와 글로벌 ID 매핑 확인
                 camera_key = f"{camera_id}_{local_id}"
                 if camera_key in self.local_to_global_mapping:
-                    # 기존 매핑이 있으면 사용
+                    # 기존 매핑이 있으면 사용 (같은 카메라 내 ReID)
                     global_id = self.local_to_global_mapping[camera_key]
                     
                     print(f"[DEBUG] Using existing mapping: Local {local_id} -> Global {global_id}")
+                    
+                    # 같은 카메라 내 ReID 타이밍 시작
+                    thread_logger.start_same_camera_reid_timing()
                     
                     # ReID 매니저를 통해 업데이트 (frame_id 사용 - 원본 프레임 번호)
                     self.reid._update_track_camera(
                         global_id, feature, bbox, str(camera_id), frame_id, local_id
                     )
+                    
+                    # 같은 카메라 내 ReID 타이밍 종료
+                    thread_logger.end_same_camera_reid_timing()
                 else:
-                    # 새로운 ReID 매칭 시도 (frame_id 사용 - 원본 프레임 번호)
+                    # 새로운 ReID 매칭 시도 (다른 카메라 간 ReID)
+                    thread_logger.start_cross_camera_reid_timing()
+                    
                     global_id = self.reid.match_or_create(
                         features=feature,
                         bbox=bbox,
@@ -219,6 +284,9 @@ class AppOrchestrator:
                         matched_tracks=frame_matched_tracks,
                         local_track_id=local_id
                     )
+                    
+                    # 다른 카메라 간 ReID 타이밍 종료
+                    thread_logger.end_cross_camera_reid_timing()
                     
                     if global_id is None:
                         global_id = local_id
@@ -251,6 +319,9 @@ class AppOrchestrator:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f'ID:{global_id}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
+            # 성능 데이터 로깅
+            thread_logger.log_frame_performance()
+            
             # 프레임 데이터를 버퍼에 저장 (processed_frame_id 사용)
             frame_data = {
                 'video_path': video_path,
@@ -442,11 +513,31 @@ def main():
         # 멀티스레딩으로 여러 비디오 처리
         all_detections = app.run_multi_video(args.videos)
         print(f"▶ Total detections: {len(all_detections)}")
+        
+        # 성능 요약 출력 (모든 스레드 로거 합쳐서)
+        print("\n" + "="*60)
+        print("📊 COMBINED PERFORMANCE SUMMARY")
+        print("="*60)
+        
+        # 각 스레드별 로거 요약
+        for camera_id, thread_logger in app.thread_performance_loggers.items():
+            print(f"\n📊 Camera {camera_id} Performance Summary:")
+            thread_logger.print_summary()
+        
+        print("="*60)
     else:
         # 단일 비디오 처리 (기존 방식)
         for video_path in args.videos:
             print(f"▶ Processing video: {video_path}")
             app.run_video(video_path)
+        
+        # 성능 요약 출력 (단일 비디오의 경우)
+        if app.thread_performance_loggers:
+            for camera_id, thread_logger in app.thread_performance_loggers.items():
+                print(f"\n📊 Camera {camera_id} Performance Summary:")
+                thread_logger.print_summary()
+        else:
+            print("📊 No performance data available")
 
 
 if __name__ == '__main__':
