@@ -218,6 +218,22 @@ class FeatureStoreRedisHandler:
                 self._remove_track(gid)
                 print(f"Redis: Expired track {gid}")
 
+    def _deserialize_data(self, data: bytes) -> any:
+        """
+        Redis에서 가져온 바이너리 데이터를 역직렬화
+        
+        Args:
+            data: Redis에서 가져온 바이너리 데이터
+            
+        Returns:
+            역직렬화된 데이터
+        """
+        try:
+            return pickle.loads(data)
+        except Exception as e:
+            print(f"[Redis] 데이터 역직렬화 실패: {str(e)}")
+            return None
+
     def _remove_track(self, global_id: int):
         """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
 
