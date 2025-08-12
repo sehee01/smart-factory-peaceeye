@@ -112,3 +112,18 @@ class ImageProcessor:
         crop = self.crop_bbox_from_frame(frame, bbox)
         feature = self.extract_feature(crop)
         return crop, feature
+    
+    def get_bbox_coordinates(self, bbox: list) -> tuple:
+        """
+        바운딩 박스에서 좌표 추출
+        
+        Args:
+            bbox: 바운딩 박스 [x1, y1, x2, y2]
+            
+        Returns:
+            tuple: (x1, y1, x2, y2, center_x, center_y)
+        """
+        x1, y1, x2, y2 = map(int, bbox)
+        center_x = (x1 + x2) / 2
+        center_y = y1
+        return x1, y1, x2, y2, center_x, center_y
