@@ -10,15 +10,11 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-<<<<<<< HEAD
-      await axios.post('http://localhost:3000/login', { username, password }, {
-=======
       await axios.post('http://localhost:5000/login', { username, password }, {
->>>>>>> origin/sehee
         withCredentials: true  // 쿠키 저장 허용
       });
       alert('로그인 성공');
-      window.location.href = '/dashboard'; // 성공 시 이동
+      navigate('/dashboard'); // React 방식 페이지 이동
     } catch (err) {
       alert(err.response?.data?.message || '로그인 실패');
     }

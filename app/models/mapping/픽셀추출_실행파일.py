@@ -40,7 +40,7 @@ def save_coordinates_to_txt(calibrator, filename=None):
 
 
 def run_calibration_process():
-    video_path = "smart-factory-peaceeye/test_vedio/0_te3.mp4" #영상주소
+    video_path = "../../test_video/KSEB03.mp4" #영상주소
     camera_id = 0                       #카메라 id
     window_name = f'Homography Calibration (Camera {camera_id})'
 

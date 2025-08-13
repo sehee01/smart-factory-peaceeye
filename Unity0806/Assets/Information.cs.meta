@@ -1,0 +1,20 @@
+fileFormatVersion: 2
+guid: dac681e4257ed4e4e9926d59d9aca5d4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - workerID: {instanceID: 0}
+  - workerName: {instanceID: 0}
+  - workerTeam: {instanceID: 0}
+  - workerRank: {instanceID: 0}
+  - workTimeText: {instanceID: 0}
+  - positionText: {instanceID: 0}
+  - panelObject: {instanceID: 0}
+  - overviewCamera: {fileID: 45435500090511110, guid: fa072b17e4f902a479551270faa7994a, type: 3}
+  - workerCamera: {fileID: 4575411225869991152, guid: c13a1dce688d5e24183408fc01bb9ca3, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
