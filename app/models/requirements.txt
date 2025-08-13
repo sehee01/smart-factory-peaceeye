@@ -37,6 +37,7 @@ git+https://github.com/KaiyangZhou/deep-person-reid.git
 flake8
 yapf
 isort==4.3.21
+openpyxl>=3.0.0
 
 # ========================================
 # 🌐 웹소켓 및 서버 (나중에 필요할 경우 사용)
