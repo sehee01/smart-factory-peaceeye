@@ -11,7 +11,11 @@ from scipy.spatial.distance import cdist
 <<<<<<< HEAD
 =======
 from point_transformer import transform_point
+<<<<<<< HEAD
 >>>>>>> sehee
+=======
+>>>>>>> origin/main
+>>>>>>> origin/homo
 
 # 경로 설정
 try:
@@ -21,7 +25,11 @@ try:
     sys.path.append('app/models/mapping')  # point_transformer 경로 추가
 =======
     sys.path.append('models/mapping')  # point_transformer 경로 추가
+<<<<<<< HEAD
 >>>>>>> sehee
+=======
+>>>>>>> origin/main
+>>>>>>> origin/homo
     from yolox.tracker.byte_tracker import BYTETracker, STrack, TrackState
     from yolox.tracker.matching import iou_distance, linear_assignment
     from torchreid.utils.feature_extractor import FeatureExtractor
@@ -29,7 +37,11 @@ try:
 <<<<<<< HEAD
     from point_transformer import transform_point
 =======
+<<<<<<< HEAD
 >>>>>>> sehee
+=======
+>>>>>>> origin/main
+>>>>>>> origin/homo
 except ImportError as e:
     print(f"필수 라이브러리 로드 실패: {e}")
     sys.exit(1)
@@ -442,7 +454,11 @@ if __name__ == '__main__':
 =======
     parser.add_argument('--videos', nargs='+', type=str, default=["test_video/KSEB02.mp4","test_video/KSEB03.mp4"], help='List of video file paths.')
     parser.add_argument('--yolo_model', type=str, default="models/weights/bestcctv.pt", help='Path to the YOLOv11 model file.')
+<<<<<<< HEAD
 >>>>>>> sehee
+=======
+>>>>>>> origin/main
+>>>>>>> origin/homo
     parser.add_argument('--redis_host', type=str, default="localhost", help='Redis server host.')
     parser.add_argument('--redis_port', type=int, default=6379, help='Redis server port.')
     
@@ -451,4 +467,8 @@ if __name__ == '__main__':
     main(cli_args) 
 =======
     main(cli_args) 
+<<<<<<< HEAD
 >>>>>>> sehee
+=======
+>>>>>>> origin/main
+>>>>>>> origin/homo
