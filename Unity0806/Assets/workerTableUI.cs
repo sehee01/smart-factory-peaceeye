@@ -5,30 +5,32 @@ using System.Collections.Generic;
 
 public class WorkerTableUI : MonoBehaviour
 {
-    [System.Serializable]
-    public class Worker
-    {
-        public bool checkbox;
-        public string name;
-        public string team;
-        public string position;
-        public string worktime; //datatimeÀ» stringÇüÀ¸·Î
-        public bool on_offline;
-    }
+    //[System.Serializable]
+    //public class Worker
+    //{
+    //    public bool checkbox;
+    //    public string name;
+    //    public string team;
+    //    public string position;
+    //    public string worktime; //datatimeÀ» stringÇüÀ¸·Î
+    //    public bool on_offline;
+    //}
 
+    [SerializeField]
+    WorkersManager workersManager;
     public RectTransform contentParent; // Content ¿ÀºêÁ§Æ® ÂüÁ¶
     public GameObject rowPrefab;        // ÇÁ¸®ÆÕ: ÇÑ ÁÙ(Row)
 
-    private List<Worker> workers = new List<Worker>();
+    private List<WorkerInfo> workers = new List<WorkerInfo>();
 
     void Start()
     {
         // ¿¹½Ã¿ë ÀÛ¾÷ÀÚ ¸ñ·Ï
-        workers.Add(new Worker { checkbox = true, name = "±èÃ¶¼ö", team = "È«º¸ÆÀ", position = "(100, 200)", worktime = "5:30", on_offline = true });
+        workers.Add(new WorkerInfo { checkbox = true, name = "±èÃ¶¼ö", team = "È«º¸ÆÀ", rank = "ÆÀ¿ø", position = "(100, 200)", worktime = "5:30", on_offline = true });
         //x: 100, y: 200
         //5½Ã°£ 30ºÐ
-        workers.Add(new Worker { checkbox = false, name = "¾È¿µÈñ", team = "°³¹ßÆÀ", position = "(0, 0)", worktime = "0:00", on_offline = false });
-        workers.Add(new Worker { checkbox = false, name = "¹Ú¼öÀÎ", team = "°³¹ßÆÀ", position = "(10, 50)", worktime = "1:00", on_offline = true });
+        workers.Add(new WorkerInfo { checkbox = false, name = "¾È¿µÈñ", team = "°³¹ßÆÀ", rank = "ÆÀ¿ø", position = "(0, 0)", worktime = "0:00", on_offline = false });
+        workers.Add(new WorkerInfo { checkbox = false, name = "¹Ú¼öÀÎ", team = "°³¹ßÆÀ", rank = "ÆÀ¿ø", position = "(10, 50)", worktime = "1:00", on_offline = true });
         PopulateTable();
     }
 
@@ -53,9 +55,16 @@ public class WorkerTableUI : MonoBehaviour
         }
     }
 
-    public void AddWorker(string name, string team, string position, string worktime, bool on_offline)
-    {
-        workers.Add(new Worker { name = name, team = team, position = position, worktime = worktime, on_offline = on_offline });
-        PopulateTable();
-    }
+    //public void AddWorker(string name, string team, string position, string worktime, bool on_offline)
+    //{
+    //    workers.Add(new WorkerInfo { name = name, team = team, position = position, worktime = worktime, on_offline = on_offline });
+    //    PopulateTable();
+    //}
+
+    // worker ¿ÀºêÁ§Æ®¸¦ ¸®½ºÆ®¿¡ Ãß°¡
+    public void AddWorker(GameObject worker)
+	{
+        workers.Add(worker.GetComponent<WorkerController>().workerInfo);
+		PopulateTable();
+	}
 }

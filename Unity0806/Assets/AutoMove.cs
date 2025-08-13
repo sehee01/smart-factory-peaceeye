@@ -17,6 +17,7 @@ public class AutoMoveWorker : MonoBehaviour
         rb.isKinematic = false;
         rb.constraints = RigidbodyConstraints.FreezeRotation;
     }
+
     void FixedUpdate()
     {
         if (targetPosition == null)
@@ -37,6 +38,7 @@ public class AutoMoveWorker : MonoBehaviour
         Vector3 forward = transform.forward;
         rb.MovePosition(rb.position + forward * moveSpeed * Time.fixedDeltaTime);
     }
+
     public void SetTarget(Vector3 newTarget)
     {
         targetPosition = newTarget;

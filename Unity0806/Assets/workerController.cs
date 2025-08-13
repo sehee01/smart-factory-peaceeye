@@ -1,125 +1,77 @@
-ï»¿using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
+
+[RequireComponent(typeof(Rigidbody))]
 public class WorkerController : MonoBehaviour
 {
-    private Dictionary<string, GameObject> workers = new Dictionary<string, GameObject>();
-    GameObject workerInfo;
+	// workerÀÇ Á¤º¸ ±â·Ï. JSONÀ¸·Î ÆÄ½ÌÇØ¼­ ³ÖÀ» ¼ö ÀÖÀ½.
+	public WorkerInfo workerInfo = new WorkerInfo();
 
-    // Inspectorì—ì„œ ì—°ê²°í•  WorkerInfoUI
-    public WorkerInfoUI workerInfoUI;
+	// ÀÚµ¿À¸·Î ¿òÁ÷ÀÌ±â À§ÇÑ º¯¼öµé.
+	public float moveSpeed = 1f;
+	public float rotationSpeed = 5f;
+	public float arriveThreshold = 0.1f;
 
-    void Awake()
+	// À§¿¡¼­ ³»·Á´Ùº¸´Â Ä«¸Ş¶ó
+	GameObject workerCamera;
+
+
+	// Start is called once before the first execution of Update after the MonoBehaviour is created
+	void Start()
     {
-        if (workerInfoUI == null)
-        {
-            workerInfoUI = Object.FindFirstObjectByType<WorkerInfoUI>();
-        }
-    }
+		// ÀÓ½Ã µ¥ÀÌÅÍ. »èÁ¦ÇØ¾ß ÇÔ.
+		// ¿©±â¿¡¼­ JSON ¹®ÀÚ¿­·Î µ¥ÀÌÅÍ¸¦ Á÷Á¢ ÀÛ¼ºÇÏ°Å³ª Àü´Ş¹ŞÀº °ªÀ» ¾²¼¼¿ä
+		//string aiJsonString = @"{
+		//          'cameraID': 'CAM_01',
+		//          'workerID': 'W123',
+		//          'position_x': 10.5,
+		//          'position_y': 8.3
+		//      }";
 
-    void Start()
-    {
-        // ëª¨ë“  Worker ì˜¤ë¸Œì íŠ¸ ìˆ˜ì§‘
-        GameObject[] allWorkers = GameObject.FindGameObjectsWithTag("Worker");
+		string dbJsonString = @"{
+            'workerID': 'W123',
+            'ÀÌ¸§': 'È«±æµ¿',
+            'ºÎ¼­': '»ı»ê1ÆÀ',
+            'Á÷±Ş': '´ë¸®',
+            '±Ù¹«½Ã°£': '5½Ã°£ 40ºĞ'
+        }";
 
-        foreach (GameObject worker in allWorkers)
-        {
-            workers[worker.name] = worker;
-            Debug.Log("ë“±ë¡ëœ ì‘ì—…ì: " + worker.name);
 
-            /*// í´ë¦­ ì´ë²¤íŠ¸ ì¶”ê°€ (ì˜µì…˜: Workerë§ˆë‹¤ í´ë¦­ ìŠ¤í¬ë¦½íŠ¸ ë¶€ì°© ì‹œ ìƒëµ ê°€ëŠ¥)
-            if (worker.GetComponent<WorkerClickHandler>() == null)
-            {
-                var clickHandler = worker.AddComponent<WorkerClickHandler>();
-                clickHandler.controller = this;
-                clickHandler.workerID = worker.name;
-            }*/
-        }
-    }
+		//// JObject·Î ÆÄ½Ì ÈÄ ¹®ÀÚ¿­·Î ´Ù½Ã Àü´Ş
+		//JObject aiJson = JObject.Parse(aiJsonString);
+		//JObject dbJson = JObject.Parse(dbJsonString);
+		//Debug.Log(aiJson);
+		//Debug.Log(dbJson);
 
+
+		// JSON ¹®ÀÚ¿­·Î workerÀÇ Á¤º¸ ¼³Á¤ (ÀÓ½Ã, ÈÄ¿¡ ¼­¹ö¿¡¼­ ¹Ş¾Æ¿Â JSON ¹®ÀÚ¿­À» ³Ö°Ô ±³Ã¼ÇØ¾ßÇÔ.)
+		workerInfo.SetInfoFromJSONString(dbJsonString);
+        //StartCoroutine(GetWorkerDataFromServer());
+
+        // ÇÏÀ§ object Áß¿¡ workerCamera¸¦ Ã£À½.
+        workerCamera = transform.Find("workerCamera")?.gameObject;
+	}
+
+	// worker camera¸¦ È°¼ºÈ­ / ºñÈ°¼ºÈ­
+	public void SetActiveTopviewCamera(bool enable)
+	{
+		// Ä«¸Ş¶ó°¡ ¾øÀ¸¸é µ¿ÀÛ ¾ÈÇÔ
+		if(!workerCamera)
+		{
+			Debug.LogWarning("ÇÏÀ§ ¿ÀºêÁ§Æ® Áß¿¡ Ä«¸Ş¶ó°¡ ¾ø½À´Ï´Ù.");
+			return;
+		}
+
+		// È°¼ºÈ­ / ºñÈ°¼ºÈ­
+		workerCamera.SetActive(enable);
+	}
+
+    // Update is called once per frame
     void Update()
     {
-        if (Input.GetMouseButtonDown(0))     //worker í”„ë¦¬íŒ¹ì„ ë§ˆìš°ìŠ¤ ì¢Œí´ë¦­ ì‹œ panelObject ON
-        {
-            if (workerInfo != null)
-                workerInfo.SetActive(true);
-        }
-        //if ()
-        //{   //ìƒíƒœì°½ì˜ X ë²„íŠ¼ í´ë¦­ ì‹œ panelObject OFF
-        //    if (workerInfo != null)
-        //        workerInfo.SetActive(false);
-        //}
+		// ÇöÀç À§Ä¡¸¦ workerInfo¿¡ ÅØ½ºÆ® Çü½ÄÀ¸·Î °è¼Ó ¾÷µ¥ÀÌÆ®
+		workerInfo.SetPosition(transform.position.x, transform.position.z);
     }
-
-    // ìœ„ì¹˜ ì—…ë°ì´íŠ¸ í•¨ìˆ˜
-    public void SetWorkerPosition(string json)
-    {
-        Debug.Log("JSë¡œë¶€í„° ë°›ì€ ë°ì´í„°: " + json);
-
-        JObject data = JObject.Parse(json);
-        string id = data["id"].ToString();
-        float x = data["x"].ToObject<float>();
-        float y = data["y"].ToObject<float>();
-
-        if (workers.ContainsKey(id))
-        {
-            GameObject worker = workers[id];
-            // ìœ„ì¹˜ ì—…ë°ì´íŠ¸ë¥¼ AutoMoveì— ë§¡ê¹€
-            AutoMoveWorker mover = worker.GetComponent<AutoMoveWorker>();
-            if (mover != null)
-            {
-                mover.SetTarget(new Vector3(x, worker.transform.position.y, y));
-            }
-        }
-        else
-        {
-            Debug.LogWarning($"ì¡´ì¬í•˜ì§€ ì•ŠëŠ” worker ID: {id}");
-        }
-    }
-
-    // í´ë¦­ ì‹œ ì •ë³´ ë³´ì—¬ì£¼ëŠ” í•¨ìˆ˜  
-    public void ShowWorkerInfo(string id)
-    {
-        Debug.Log("ShowWorkerInfo");
-
-        if (!workers.ContainsKey(id))
-            return;
-        if (workerInfoUI == null)
-        {
-            Debug.LogError("workerInfoUIê°€ í• ë‹¹ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤!");
-            return;
-        }
-
-        GameObject worker = workers[id];
-        Vector3 pos = worker.transform.position;
-
-        Debug.Log(id);
-
-        // ì—¬ê¸°ì—ì„œ JSON ë¬¸ìì—´ë¡œ ë°ì´í„°ë¥¼ ì§ì ‘ ì‘ì„±í•˜ê±°ë‚˜ ì „ë‹¬ë°›ì€ ê°’ì„ ì“°ì„¸ìš”
-        string aiJsonString = @"{
-            'cameraID': 'CAM_01',
-            'workerID': 'W123',
-            'position_x': 10.5,
-            'position_y': 8.3
-        }";
-
-        string dbJsonString = @"{
-            'workerID': 'W123',
-            'ì´ë¦„': 'í™ê¸¸ë™',
-            'ë¶€ì„œ': 'ìƒì‚°1íŒ€',
-            'ì§ê¸‰': 'ëŒ€ë¦¬',
-            'ê·¼ë¬´ì‹œê°„': '5ì‹œê°„ 40ë¶„'
-        }";
-
-        // JObjectë¡œ íŒŒì‹± í›„ ë¬¸ìì—´ë¡œ ë‹¤ì‹œ ì „ë‹¬
-        JObject aiJson = JObject.Parse(aiJsonString);
-        JObject dbJson = JObject.Parse(dbJsonString);
-
-        Debug.Log(aiJson);
-        Debug.Log(dbJson);
-
-        workerInfoUI.SetWorkerInfoFromJson(aiJsonString, dbJsonString);
-    }
-
 }

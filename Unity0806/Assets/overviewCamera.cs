@@ -14,6 +14,9 @@ public class OverviewCamera : MonoBehaviour
 
     private float fixedHeight;  // 고정 Y 값
 
+    [SerializeField]
+    UIPageCanvasController canvasController;
+
     void Start()
     {
         currentZoom = Camera.main.orthographicSize;
@@ -22,6 +25,12 @@ public class OverviewCamera : MonoBehaviour
 
     void Update()
     {
+        // 현재 캔버스가 main 캔버스가 아니라면 
+        if(canvasController != null && canvasController.openedUI == true)
+        {
+            return;
+        }
+
         HandleMouseRotation();
         HandleMouseMovement();
         HandleZoom();

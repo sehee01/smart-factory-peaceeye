@@ -11,10 +11,14 @@ public class UIPageCanvasController : MonoBehaviour
     public GameObject listCanvas;
     public GameObject dashboardCanvas;
     public GameObject addListCanvas;
+    public GameObject workerInfoCanvas;
 
     public Button xButton;
     public Button xButton2;
     public Button xButton3;
+
+    [HideInInspector]
+    public bool openedUI = false;           // UI창이 열려 있으면 true, 닫혀있으면 false. 마우스로 카메라를 이동시키는 기능을 끌 때 사용.
 
     /*public Animator mainAnimator;
     public Animator listAnimator;
@@ -24,6 +28,8 @@ public class UIPageCanvasController : MonoBehaviour
 
     void Start()
     {
+        openedUI = false;
+
         mainCanvas.SetActive(true);
         listCanvas.SetActive(false);
         dashboardCanvas.SetActive(false);
@@ -38,6 +44,8 @@ public class UIPageCanvasController : MonoBehaviour
 
     public void ShowWorkerlist()
     {
+        openedUI = true;
+
         listCanvas.SetActive(true);
         mainCanvas.SetActive(false);
         //StartCoroutine(SwitchCanvasWithAnimation(mainCanvas, mainAnimator, "SlideOut", listCanvas, listAnimator, "SlideIn"));
@@ -45,31 +53,55 @@ public class UIPageCanvasController : MonoBehaviour
 
     public void Showdashboard()
     {
+		openedUI = true;
+
         dashboardCanvas.SetActive(true);
         mainCanvas.SetActive(false);
         //StartCoroutine(SwitchCanvasWithAnimation(mainCanvas, mainAnimator, "SlideOut", dashboardCanvas, dashboardAnimator, "SlideIn"));
     }
     public void ShowAddlist()
     {
-        addListCanvas.SetActive(true);
+		openedUI = true;
+
+		addListCanvas.SetActive(true);
         listCanvas.SetActive(false);
         //StartCoroutine(SwitchCanvasWithAnimation(mainCanvas, mainAnimator, "SlideOut", listCanvas, listAnimator, "SlideIn"));
     }
 
+    public void ShowWorkerInfo()
+    {
+        openedUI = true;
+
+        mainCanvas.SetActive(true);
+        workerInfoCanvas.SetActive(true);
+    }
+
     public void XButtonClick()      //workerList -> main
     {
-        mainCanvas.SetActive(true);
+		openedUI = false;
+
+		mainCanvas.SetActive(true);
         if (listCanvas != null) { listCanvas.gameObject.SetActive(false); }
     }
     public void XButton2Click()     //dashboard -> main
     {
-        mainCanvas.SetActive(true);
+		openedUI = false;
+
+		mainCanvas.SetActive(true);
         if (dashboardCanvas != null) { dashboardCanvas.gameObject.SetActive(false); }
     }
     public void XButton3Click()     //addList -> workerList
     {
-        listCanvas.SetActive(true);
+		listCanvas.SetActive(true);
         if (addListCanvas != null) { addListCanvas.gameObject.SetActive(false); }
+    }
+
+    public void XButton4Click()     // workerInfo -> main
+    {
+		openedUI = false;
+
+		mainCanvas.SetActive(true);
+        if (workerInfoCanvas != null) { workerInfoCanvas.SetActive(false); }
     }
 
     /*private System.Collections.IEnumerator SwitchCanvasWithAnimation(
