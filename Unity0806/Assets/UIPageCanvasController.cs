@@ -14,6 +14,7 @@ public class UIPageCanvasController : MonoBehaviour
 
     public Button xButton;
     public Button xButton2;
+    public Button xButton3;
 
     /*public Animator mainAnimator;
     public Animator listAnimator;
@@ -26,8 +27,7 @@ public class UIPageCanvasController : MonoBehaviour
         mainCanvas.SetActive(true);
         listCanvas.SetActive(false);
         dashboardCanvas.SetActive(false);
-        buttonHandler.buttonCanvas.SetActive(false);
-        buttonHandler.Panel?.SetActive(false);
+        buttonHandler.editPanel?.SetActive(false);
         buttonHandler.addList?.SetActive(false);
         buttonHandler.searchInput?.SetActive(false);
         buttonHandler.alertlog?.SetActive(false);
@@ -56,13 +56,17 @@ public class UIPageCanvasController : MonoBehaviour
         //StartCoroutine(SwitchCanvasWithAnimation(mainCanvas, mainAnimator, "SlideOut", listCanvas, listAnimator, "SlideIn"));
     }
 
-    public void XButtonClick()
+    public void XButtonClick()      //workerList -> main
     {
         mainCanvas.SetActive(true);
         if (listCanvas != null) { listCanvas.gameObject.SetActive(false); }
+    }
+    public void XButton2Click()     //dashboard -> main
+    {
+        mainCanvas.SetActive(true);
         if (dashboardCanvas != null) { dashboardCanvas.gameObject.SetActive(false); }
     }
-    public void XButton2Click()
+    public void XButton3Click()     //addList -> workerList
     {
         listCanvas.SetActive(true);
         if (addListCanvas != null) { addListCanvas.gameObject.SetActive(false); }

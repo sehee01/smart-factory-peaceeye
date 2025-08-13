@@ -1,0 +1,49 @@
+# ========================================
+# ⚙️ 기본 필수 패키지
+# ========================================
+numpy>=1.23,<2.0
+scipy>=1.8
+matplotlib
+opencv-python
+pillow
+tqdm
+chardet
+gdown
+yacs
+imageio
+cython
+Cython
+future
+pyyaml
+
+# ========================================
+# 🔥 딥러닝 핵심
+# ========================================
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+torchaudio==2.7.1+cu118
+ultralytics==8.3.163
+ultralytics-thop==2.0.14
+
+# ========================================
+# 🔍 객체 추적 & ReID 관련
+# ========================================
+cython_bbox @ git+https://github.com/waspinator/cython_bbox.git
+git+https://github.com/KaiyangZhou/deep-person-reid.git
+
+# ========================================
+# 🧪 개발 도구 (옵션)
+# ========================================
+flake8
+yapf
+isort==4.3.21
+
+# ========================================
+# 🌐 웹소켓 및 서버 (나중에 필요할 경우 사용)
+# ========================================
+# fastapi
+# uvicorn
+# websocket-client
+# websockets
+# python-socketio
+# python-engineio

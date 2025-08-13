@@ -3,7 +3,10 @@ import json
 import numpy as np
 import pickle
 import threading
+<<<<<<< HEAD
+=======
 import time
+>>>>>>> sehee
 from scipy.spatial.distance import cdist
 from ByteTrack.yolox.tracker.basetrack import BaseTrack
 
@@ -12,12 +15,24 @@ class RedisGlobalReIDManagerV2:
     카메라별 우선순위 매칭과 다중 카메라 정보 통합을 지원하는 Redis Global ReID 매니저
     사라지는 객체 감지 및 TTL 제외 관리 포함
     """
+<<<<<<< HEAD
+    def __init__(self, similarity_threshold=0.7, feature_ttl=300, max_features_per_camera=10, redis_host='localhost', redis_port=6379, frame_rate=30):
+=======
     def __init__(self, similarity_threshold=0.7, feature_ttl=300, max_features_per_camera=10, redis_host='localhost', redis_port=6379, frame_rate=30, grace_period_frames=15):
+>>>>>>> sehee
         self.redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=False)
         self.similarity_threshold = similarity_threshold
         self.feature_ttl = feature_ttl  # 초 단위
         self.max_features_per_camera = max_features_per_camera
         self.frame_rate = frame_rate
+<<<<<<< HEAD
+        self.lock = threading.Lock()
+        
+        # Redis 키 패턴 (통합)
+        self.track_key_pattern = "global_track:{}"
+        self.track_data_key_pattern = "global_track_data:{}"
+        self.track_history_key_pattern = "track_history:{}:{}"  # camera_id:track_id
+=======
         self.grace_period_frames = grace_period_frames  # 새로운 객체의 유예기간 (프레임 단위) - 기본값 5로 변경
         self.lock = threading.Lock()
         
@@ -28,16 +43,20 @@ class RedisGlobalReIDManagerV2:
         # Redis 키 패턴 (사전 등록 데이터용) - global_track_pre 형태로 변경
         self.pre_registered_key_pattern = "global_track_pre:{}"
         self.pre_registered_data_key_pattern = "global_track_data_pre:{}"
+>>>>>>> sehee
         
         # 전역 프레임 카운터 (모든 카메라가 공유)
         self.global_frame_counter = 0
         
         # TTL을 프레임 단위로 변환
         self.ttl_frames = self.feature_ttl * self.frame_rate
+<<<<<<< HEAD
+=======
         
         # 카메라별 추적 상태 관리
         self.camera_tracking_ids = {}  # {camera_id: set(track_ids)} - 현재 프레임에서 추적 중인 ID들
         self.camera_lost_ids = {}      # {camera_id: set(track_ids)} - 이전 프레임에서 놓친 ID들
+>>>>>>> sehee
     
     def update_frame(self, frame_id):
         """현재 프레임 업데이트 및 만료된 트랙 정리 (통합된 구조)"""
@@ -74,6 +93,8 @@ class RedisGlobalReIDManagerV2:
                         status = "disappeared" if is_disappeared else "normal"
                         print(f"Global ReID: Expired {status} track {track_id} (global_frame: {self.global_frame_counter}, last_seen: {max_last_seen}, diff: {self.global_frame_counter - max_last_seen})")
     
+<<<<<<< HEAD
+=======
     def update_camera_tracking_state(self, camera_id, current_track_ids):
         """카메라별 추적 상태 업데이트 (프레임 시작 시 호출)"""
         camera_id_str = str(camera_id)
@@ -96,12 +117,21 @@ class RedisGlobalReIDManagerV2:
         
         return lost_ids
     
+>>>>>>> sehee
     def _remove_track(self, track_id):
         """트랙 완전 제거 (통합된 구조)"""
         track_key = self.track_key_pattern.format(track_id)
         data_key = self.track_data_key_pattern.format(track_id)
         
+<<<<<<< HEAD
+        # 트랙 히스토리도 함께 제거
+        history_keys = self.redis_client.keys(f"track_history:*:{track_id}")
+        all_keys = [track_key, data_key] + history_keys
+        
+        self.redis_client.delete(*all_keys)
+=======
         self.redis_client.delete(track_key, data_key)
+>>>>>>> sehee
     
     def detect_disappearing_object(self, bbox, frame_shape, previous_bbox_area=None):
         """객체가 화면에서 사라지는지 감지"""
@@ -120,7 +150,11 @@ class RedisGlobalReIDManagerV2:
         return touching_boundary or is_shrinking
     
     def get_disappearing_zone(self, bbox, frame_shape):
+<<<<<<< HEAD
+        """객체가 사라지는 영역을 구분"""
+=======
         """객체가 사라지는 영역을 구분 (디버깅에 사용중중)"""
+>>>>>>> sehee
         x1, y1, x2, y2 = bbox
         frame_height, frame_width = frame_shape
         
@@ -175,20 +209,64 @@ class RedisGlobalReIDManagerV2:
             self.global_frame_counter = max(self.global_frame_counter, frame_id)
             
             # 1단계: 사라지는 객체 감지
+<<<<<<< HEAD
+            previous_bbox_area = self._get_previous_bbox_area(camera_id, frame_id)
+            is_disappearing = self.detect_disappearing_object(bbox, frame_shape, previous_bbox_area)
+=======
             is_disappearing = self.detect_disappearing_object(bbox, frame_shape, None)
+>>>>>>> sehee
             
             if is_disappearing:
                 print(f"Global ReID: Skipping ReID for disappearing object at {self.get_disappearing_zone(bbox, frame_shape)}")
                 # 사라지는 객체는 기존 ID 유지 (ReID 스킵)
                 return self._get_existing_id_for_disappearing_object(bbox, camera_id, frame_id, matched_tracks)
             
+<<<<<<< HEAD
+            # 2단계: 정상적인 ReID 매칭
+=======
             # 2단계: 통합 ReID 매칭 (최근 10프레임 + 사전 등록된 원본 데이터)
+>>>>>>> sehee
             # 특징 벡터 정규화
             features = features / np.linalg.norm(features)
             
             best_match_id = None
             best_similarity = 0
             best_match_camera = None
+<<<<<<< HEAD
+            
+            # 같은 카메라 내 매칭 (높은 우선순위)
+            same_camera_match = self._match_same_camera(features, bbox, camera_id, frame_id, matched_tracks)
+            if same_camera_match:
+                best_match_id, best_similarity, best_match_camera = same_camera_match
+                print(f"Global ReID: Same camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
+            
+            # 다른 카메라 매칭 (낮은 우선순위, 같은 카메라 매칭이 없을 때만)
+            if best_match_id is None:
+                other_camera_match = self._match_other_cameras(features, bbox, camera_id, frame_id, matched_tracks)
+                if other_camera_match:
+                    best_match_id, best_similarity, best_match_camera = other_camera_match
+                    print(f"Global ReID: Cross camera match - Track {best_match_id} (similarity: {best_similarity:.3f})")
+            
+            if best_match_id is not None:
+                # 기존 트랙에 현재 카메라 정보 추가/업데이트
+                self._update_track_camera(best_match_id, features, bbox, camera_id, frame_id)
+                matched_tracks.add(best_match_id)
+                return best_match_id
+            else:
+                # 새로운 글로벌 ID 생성
+                global_id = BaseTrack.next_id()
+                self._create_track(global_id, features, bbox, camera_id, frame_id)
+                print(f"Global ReID: Created new track {global_id}")
+                return global_id
+    
+    def _get_previous_bbox_area(self, camera_id, frame_id):
+        """이전 프레임의 바운딩 박스 크기 가져오기"""
+        # 간단한 구현: 실제로는 더 정교한 히스토리 관리 필요
+        return None
+    
+    def _match_same_camera(self, features, bbox, camera_id, frame_id, matched_tracks):
+        """같은 카메라 내 매칭"""
+=======
             match_type = None
             
             # 통합 매칭: 최근 10프레임 + 사전 등록된 원본 데이터
@@ -232,6 +310,7 @@ class RedisGlobalReIDManagerV2:
     
     def _match_same_camera(self, features, bbox, camera_id, frame_id, matched_tracks):
         """같은 카메라 내 매칭 (사전 등록된 특징 포함)"""
+>>>>>>> sehee
         track_keys = self.redis_client.keys("global_track:*")
         
         best_match_id = None
@@ -257,7 +336,11 @@ class RedisGlobalReIDManagerV2:
                     
                     # 위치 기반 필터링 (같은 카메라에서만)
                     location_score = 0
+<<<<<<< HEAD
+                    if 'last_bbox' in camera_data:
+=======
                     if 'last_bbox' in camera_data and camera_data['last_bbox'] is not None:
+>>>>>>> sehee
                         last_bbox = camera_data['last_bbox']
                         current_center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
                         last_center = [(last_bbox[0] + last_bbox[2]) / 2, (last_bbox[1] + last_bbox[3]) / 2]
@@ -302,7 +385,11 @@ class RedisGlobalReIDManagerV2:
         return None
     
     def _match_other_cameras(self, features, bbox, camera_id, frame_id, matched_tracks):
+<<<<<<< HEAD
+        """다른 카메라와 매칭"""
+=======
         """다른 카메라와 매칭 (사전 등록된 특징 포함)"""
+>>>>>>> sehee
         track_keys = self.redis_client.keys("global_track:*")
         
         best_match_id = None
@@ -349,6 +436,8 @@ class RedisGlobalReIDManagerV2:
             return best_match_id, best_similarity, best_match_camera
         return None
     
+<<<<<<< HEAD
+=======
     def _match_integrated_features(self, features, bbox, camera_id, frame_id, matched_tracks):
         """개선된 통합 매칭: 카메라별 추적 상태를 고려한 효율적인 매칭"""
         track_keys = self.redis_client.keys("global_track:*")
@@ -575,6 +664,7 @@ class RedisGlobalReIDManagerV2:
             return best_match_id, best_similarity, best_match_camera, match_type
         return None
     
+>>>>>>> sehee
     def _update_track_camera(self, track_id, features, bbox, camera_id, frame_id):
         """기존 트랙에 새로운 카메라 정보 추가/업데이트 (통합된 구조)"""
         data_key = self.track_data_key_pattern.format(track_id)
@@ -666,6 +756,8 @@ class RedisGlobalReIDManagerV2:
             return pickle.loads(track_data)
         return None
     
+<<<<<<< HEAD
+=======
     def get_pre_registered_tracks(self):
         """사전 등록된 트랙들만 조회 (global_track_pre 키 패턴 사용)"""
         pre_registered_tracks = {}
@@ -735,6 +827,7 @@ class RedisGlobalReIDManagerV2:
                 print(f"  - ID {pre_track_id}: No features found")
         print("=" * 30)
     
+>>>>>>> sehee
     def _mark_track_as_disappeared(self, track_id, bbox, camera_id, frame_id):
         """트랙을 사라진 상태로 표시"""
         data_key = self.track_data_key_pattern.format(track_id)
@@ -885,6 +978,9 @@ class RedisGlobalReIDManagerV2:
     
     def _update_disappeared_track_camera(self, track_id, bbox, camera_id, frame_id):
         """사라진 객체 트랙 업데이트 (통합된 구조)"""
+<<<<<<< HEAD
+        return self._update_track_camera_simple(track_id, bbox, camera_id, frame_id) 
+=======
         return self._update_track_camera_simple(track_id, bbox, camera_id, frame_id)
     
     def _get_next_available_id(self):
@@ -1092,3 +1188,4 @@ class RedisGlobalReIDManagerV2:
         return intersection / union if union > 0 else 0.0 
 
  
+>>>>>>> sehee
