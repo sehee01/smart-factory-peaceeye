@@ -32,8 +32,14 @@ class PreRegistrationManager:
     app/pre_img/ 폴더에서 각 global_id별 폴더의 이미지들을 처리
     """
     
-    def __init__(self, redis_host='localhost', redis_port=6379):
-        self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=False)
+    def __init__(self, redis_handler=None):
+        # 직접 Redis 연결 (사전 등록 전용)
+        self.redis = redis.Redis(
+            host=settings.REDIS_CONFIG["host"],
+            port=settings.REDIS_CONFIG["port"],
+            decode_responses=False
+        )
+        
         # app/pre_img 폴더 경로 설정
         current_dir = os.path.dirname(os.path.abspath(__file__))
         app_dir = os.path.dirname(current_dir)
@@ -202,6 +208,7 @@ class PreRegistrationManager:
         
         # 이미지 크롭
         crop = image[y1:y2, x1:x2]
+        crop = cv2.resize(crop, (128, 256))
         
         if crop.size == 0:
             raise ValueError(f"크롭된 이미지가 비어있습니다: {image_path}")

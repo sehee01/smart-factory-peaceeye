@@ -32,6 +32,64 @@ class ImageProcessor:
             device=device
         )
     
+    def calculate_iou(self, bbox1: list, bbox2: list) -> float:
+        """
+        두 바운딩 박스 간의 IoU(Intersection over Union) 계산
+        
+        Args:
+            bbox1: 첫 번째 바운딩 박스 [x1, y1, x2, y2]
+            bbox2: 두 번째 바운딩 박스 [x1, y1, x2, y2]
+            
+        Returns:
+            iou: IoU 값 (0~1)
+        """
+        x1_1, y1_1, x2_1, y2_1 = bbox1
+        x1_2, y1_2, x2_2, y2_2 = bbox2
+        
+        # 교집합 영역 계산
+        x1_i = max(x1_1, x1_2)
+        y1_i = max(y1_1, y1_2)
+        x2_i = min(x2_1, x2_2)
+        y2_i = min(y2_1, y2_2)
+        
+        if x2_i <= x1_i or y2_i <= y1_i:
+            return 0.0
+        
+        intersection = (x2_i - x1_i) * (y2_i - y1_i)
+        
+        # 합집합 영역 계산
+        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def detect_overlap(self, current_bbox: list, all_tracks: list, current_track_id: int, overlap_threshold: float = 0.4) -> bool:
+        """
+        현재 트랙이 다른 트랙과 겹치는지 감지
+        
+        Args:
+            current_bbox: 현재 트랙의 바운딩 박스
+            all_tracks: 모든 트랙 리스트
+            current_track_id: 현재 트랙의 ID
+            overlap_threshold: 겹침 임계값 (기본값: 0.4)
+            
+        Returns:
+            bool: 겹침 여부
+        """
+        for track in all_tracks:
+            if track["track_id"] == current_track_id:
+                continue
+            
+            other_bbox = track["bbox"]
+            iou = self.calculate_iou(current_bbox, other_bbox)
+            
+            if iou > overlap_threshold:
+                # print(f"[ImageProcessor] Overlap detected: Track {current_track_id} overlaps with Track {track['track_id']} (IoU: {iou:.3f})")
+                return True
+        
+        return False
+    
     def crop_bbox_from_frame(self, frame: np.ndarray, bbox: list) -> np.ndarray:
         """
         프레임에서 바운딩 박스 영역을 크롭
@@ -106,18 +164,29 @@ class ImageProcessor:
         feature = crop_img.mean(axis=(0, 1))  # RGB 평균
         return feature / 255.0
     
-    def process_track_for_reid(self, frame: np.ndarray, track: dict) -> tuple:
+    def process_track_for_reid(self, frame: np.ndarray, track: dict, all_tracks: list = None) -> tuple:
         """
         트랙 정보를 받아서 크롭 및 feature 추출을 수행
+        겹침이 감지되면 crop을 하지 않고 None을 반환
         
         Args:
             frame: 입력 프레임
             track: 트랙 정보 (bbox 포함)
+            all_tracks: 모든 트랙 리스트 (겹침 감지용)
             
         Returns:
-            tuple: (cropped_image, feature_vector)
+            tuple: (cropped_image, feature_vector) 또는 (None, None) (겹침 시)
         """
         bbox = track["bbox"]
+        
+        # 겹침 감지 (all_tracks가 제공된 경우에만)
+        if all_tracks is not None:
+            # 겹침 감지
+            if self.detect_overlap(bbox, all_tracks, track["track_id"]):
+                # print(f"[ImageProcessor] Overlap detected: Track {current_track_id} overlaps with another track")
+                # print(f"[ImageProcessor] Skipping crop for Track {current_track_id} due to overlap")
+                return None, None
+        
         crop = self.crop_bbox_from_frame(frame, bbox)
         feature = self.extract_feature(crop)
         return crop, feature
