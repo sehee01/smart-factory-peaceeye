@@ -30,9 +30,9 @@ app.use(cookieParser());
 app.use("/",        require("./routes/loginRoutes")); 
 app.use("/zones",   require("./routes/zoneRoutes"));  
 app.use("/alerts",  require("./routes/alertRoutes")); 
-app.use("/team",    require("./routes/teamRoutes"));  
 app.use("/workers", require("./routes/workerRoutes"));
 app.use("/dashboard", require("./routes/dashboardRoutes"));
+app.use("/tasks", require("./routes/taskRoutes"));
 
 // ── WebSocket 서버 (WS_PORT, HTTP와 분리) ──────────────────────────
 const wss = new WebSocket.Server({ port: WS_PORT, perMessageDeflate: false });
