@@ -281,7 +281,7 @@ class GroundTruthCalibration:
 
 def main():
     """메인 함수"""
-    video_path = "smart-factory-peaceeye/app/test_video/final01.mp4"
+    video_path = "smart-factory-peaceeye/app/test_video/final02.mp4"
     output_file = f"{video_path.split('/')[-1].split('.')[0]}_ground_truth_calibration.json"
     
     # 캘리브레이션 실행
