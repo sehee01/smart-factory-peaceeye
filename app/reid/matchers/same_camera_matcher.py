@@ -55,7 +55,7 @@ class SameCameraMatcher:
             candidate_features = candidate_data['features']
             candidate_bbox = candidate_data.get('bbox', bbox)
             
-            # 위치 기반 필터링 (같은 카메라에서만) - 더 관대하게
+            # 위치 기반 필터링 (같은 카메라에서만)
             location_score = self._calculate_location_score(bbox, candidate_bbox)
             if location_score < 0.05:  # 더 관대하게 (0.1 -> 0.05)
                 continue #location_score가 현재 0또는 1이여서 BBOX거리100픽셀 이상이면 매칭 안됨
@@ -73,18 +73,18 @@ class SameCameraMatcher:
                 
                 feature_similarity = self.similarity.calculate_similarity(features, weighted_average)
                 
-                # 위치 기반 동적 임계값 계산 (더 관대하게)
-                # 위치가 가까우면 임계값을 낮춤 (더 관대한 매칭)
-                dynamic_threshold = self.threshold * (1.0 - location_score * 0.7)
-                # 최소 임계값 보장 (더 낮게)
-                dynamic_threshold = max(dynamic_threshold, self.threshold * 0.2)
+                # 위치가 가까우면 유사도에 0.1 추가
+                if location_score > 0.8:  # 위치가 매우 가까우면
+                    adjusted_similarity = feature_similarity + 0.1
+                    print(f"[SameCameraMatcher] Track {global_id}: original_similarity={feature_similarity:.3f}, location_bonus=+0.1, adjusted_similarity={adjusted_similarity:.3f}, location_score={location_score:.3f}")
+                else:
+                    adjusted_similarity = feature_similarity
+                    print(f"[SameCameraMatcher] Track {global_id}: similarity={feature_similarity:.3f}, threshold={self.threshold:.3f}, location_score={location_score:.3f}")
                 
-                print(f"[SameCameraMatcher] Track {global_id}: similarity={feature_similarity:.3f}, threshold={dynamic_threshold:.3f}, location_score={location_score:.3f}")
-                
-                if feature_similarity > best_similarity and feature_similarity > dynamic_threshold:
-                    best_similarity = feature_similarity
+                if adjusted_similarity > best_similarity and feature_similarity > self.threshold:
+                    best_similarity = adjusted_similarity
                     best_match_id = global_id
-                    print(f"[SameCameraMatcher] New best match: Track {global_id} (similarity: {feature_similarity:.3f})")
+                    print(f"[SameCameraMatcher] New best match: Track {global_id} (adjusted_similarity: {adjusted_similarity:.3f})")
         
         if best_match_id:
             print(f"[SameCameraMatcher] Same camera match: Track {best_match_id} (similarity: {best_similarity:.3f})")

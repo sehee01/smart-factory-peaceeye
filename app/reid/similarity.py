@@ -30,6 +30,8 @@ class FeatureSimilarityCalculator:
         min_index = np.argmin(dists)
         min_dist = dists[min_index]
 
+        print(f"[SimilarityCalculator] Best match: ID {ids[min_index]} (distance: {min_dist:.3f}, threshold: {threshold:.3f})")
+
         if min_dist < threshold:
             return ids[min_index]
         return None
@@ -48,4 +50,9 @@ class FeatureSimilarityCalculator:
         
         # cosine 유사도 계산
         similarity = 1 - cdist([feature1_norm], [feature2_norm], metric='cosine')[0][0]
+        
+        # 유사도 계산 로그 (너무 자주 출력되지 않도록 조건부)
+        if similarity > 0.5:  # 높은 유사도일 때만 로그 출력
+            print(f"[SimilarityCalculator] Feature similarity: {similarity:.3f}")
+        
         return similarity

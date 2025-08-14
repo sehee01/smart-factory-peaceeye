@@ -43,6 +43,8 @@ class CrossCameraMatcher:
         """
         candidates = self.redis.get_candidate_features(exclude_camera=camera_id)
         
+        print(f"[CrossCameraMatcher] Cross camera matching for camera {camera_id}: found {len(candidates)} candidates")
+        
         best_match_id = None
         best_similarity = 0
         
@@ -62,12 +64,17 @@ class CrossCameraMatcher:
                 
                 similarity = self.similarity.calculate_similarity(features, weighted_average)
                 
+                print(f"[CrossCameraMatcher] Track {global_id}: similarity={similarity:.3f}, threshold={self.threshold:.3f}")
+                
                 # 다른 카메라는 더 엄격한 임계값 사용 (더 관대하게)
                 if similarity > best_similarity and similarity > self.threshold * 1.0:
                     best_similarity = similarity
                     best_match_id = global_id
+                    print(f"[CrossCameraMatcher] New best match: Track {global_id} (similarity: {similarity:.3f})")
         
         if best_match_id:
-            print(f"[CrossCameraMatcher] Other camera match: Track {best_match_id} (similarity: {best_similarity:.3f})")
+            print(f"[CrossCameraMatcher] Cross camera match: Track {best_match_id} (similarity: {best_similarity:.3f})")
             return best_match_id, best_similarity
+        else:
+            print(f"[CrossCameraMatcher] No cross camera match found (best similarity: {best_similarity:.3f})")
         return None
