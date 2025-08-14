@@ -11,6 +11,7 @@ import time
 import json
 import requests
 from result.performance_logger import PerformanceLogger
+from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXTRA_PATHS = [
@@ -344,14 +345,14 @@ class IntegratedTrackingSystem:
             
             # 결과 저장
             detection_data = {
-                "cameraID": int(camera_id),
-                "workerID": int(global_id),
-                "position_X": real_x,
-                "position_Y": real_y,
-                "frame_id": frame_id,
-                "local_id": local_id,
-                "bbox": [x1, y1, x2, y2],
-                "image_coords": [point_x, point_y]
+                "camera_id": int(camera_id),
+                "worker_id": int(global_id),
+                "x": float(real_x),
+                "y": float(real_y),
+                "frame_id": int(frame_id),
+                "local_id": int(local_id),
+                "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                "image_coords": [float(point_x), float(point_y)]
             }
             frame_detections.append(detection_data)
             
@@ -377,20 +378,18 @@ class IntegratedTrackingSystem:
         
         # 백엔드 형식에 맞게 데이터 변환
         worker_data = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "workers": []
         }
         
         for det in detections:
             worker_info = {
-                "workerID": det["workerID"],
-                "cameraID": det["cameraID"],
-                "position": {
-                    "x": det["position_X"],
-                    "y": det["position_Y"]
-                },
-                "frame_id": det["frame_id"],
-                "local_id": det["local_id"]
+                "worker_id": det.get("worker_id") or det.get("workerID"),
+                "camera_id": det.get("camera_id") or det.get("cameraID"),
+                "x": det.get("x") if det.get("x") is not None else det.get("position_X"),
+                "y": det.get("y") if det.get("y") is not None else det.get("position_Y"),
+                "frame_id": det.get("frame_id"),
+                "local_id": det.get("local_id"),
             }
             worker_data["workers"].append(worker_info)
         
