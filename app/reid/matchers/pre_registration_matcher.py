@@ -64,6 +64,7 @@ class PreRegistrationMatcher:
             # 2. 각 Global ID와 유사도 계산
             best_match_id = None
             best_match_count = 0
+            best_max_similarity = 0.0  # 최고 유사도 값 추가
             
             for global_id in pre_registered_ids:
                 print(f"[DEBUG] --- Global ID {global_id} 매칭 시도 ---")
@@ -98,16 +99,31 @@ class PreRegistrationMatcher:
                             print(f"[DEBUG] ❌ Global ID {global_id} feature {i+1} 유사도 계산 실패: {str(e)}")
                             continue
                     
+                    # 현재 ID의 최고 유사도 값 계산
+                    max_similarity = max(similarities) if similarities else 0.0
+                    
                     print(f"[DEBUG] Global ID {global_id}: {match_count}/{self.max_features_per_id} feature 매칭 (임계값: {self.similarity_threshold})")
                     print(f"[DEBUG] 유사도 분포: {[f'{s:.4f}' for s in similarities]}")
+                    print(f"[DEBUG] 최고 유사도: {max_similarity:.4f}")
                     
-                    # 4. 최소 매칭 개수 이상이고, 더 많은 개수가 매칭된 경우 선택
-                    if match_count >= self.min_matching_features and match_count > best_match_count:
-                        best_match_count = match_count
-                        best_match_id = global_id
-                        print(f"[DEBUG] 🎯 새로운 최고 매칭: Global ID {global_id} ({match_count}/{self.max_features_per_id})")
-                    elif match_count >= self.min_matching_features:
-                        print(f"[DEBUG] ⚠️ Global ID {global_id}도 조건 만족하지만 더 낮은 매칭 개수 ({match_count} <= {best_match_count})")
+                    # 4. 최소 매칭 개수 이상인 경우 처리
+                    if match_count >= self.min_matching_features:
+                        # 더 많은 개수가 매칭된 경우 선택
+                        if match_count > best_match_count:
+                            best_match_count = match_count
+                            best_match_id = global_id
+                            best_max_similarity = max_similarity
+                            print(f"[DEBUG] 🎯 새로운 최고 매칭: Global ID {global_id} ({match_count}/{self.max_features_per_id}, 최고유사도: {max_similarity:.4f})")
+                        # 매칭 개수가 동일한 경우 최고 유사도 값 비교
+                        elif match_count == best_match_count:
+                            if max_similarity > best_max_similarity:
+                                best_match_id = global_id
+                                best_max_similarity = max_similarity
+                                print(f"[DEBUG] 🎯 동일 매칭 개수에서 더 높은 유사도로 선택: Global ID {global_id} (최고유사도: {max_similarity:.4f} > {best_max_similarity:.4f})")
+                            else:
+                                print(f"[DEBUG] ⚠️ Global ID {global_id}도 동일 매칭 개수이지만 더 낮은 최고 유사도 ({max_similarity:.4f} <= {best_max_similarity:.4f})")
+                        else:
+                            print(f"[DEBUG] ⚠️ Global ID {global_id}도 조건 만족하지만 더 낮은 매칭 개수 ({match_count} < {best_match_count})")
                     else:
                         print(f"[DEBUG] ❌ Global ID {global_id}: 최소 매칭 개수 미달 ({match_count} < {self.min_matching_features})")
                         
