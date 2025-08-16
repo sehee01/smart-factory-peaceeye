@@ -38,7 +38,7 @@ REID_CONFIG = {
     # 같은 카메라 내 매칭 설정
     "same_camera": {
         "location_threshold": 0.05,      # 위치 기반 필터링 임계값 (0.05~0.1 권장)
-        "max_distance": 100,             # 바운딩 박스 중심점 간 최대 거리 (픽셀)
+        "max_distance": 200,             # 바운딩 박스 중심점 간 최대 거리 (픽셀)
         "dynamic_threshold_factor": 0.7, # 위치 기반 동적 임계값 조정 계수 (기본 임계값에 곱해짐)
                                         # 계산식: threshold * (1.0 - location_score * 0.7)
                                         # 예: 위치가 가까우면 (location_score=0.8) → 0.8 * (1.0 - 0.8 * 0.7) = 0.352
@@ -51,7 +51,7 @@ REID_CONFIG = {
     
     # 다른 카메라간 매칭 설정
     "cross_camera": {
-        "threshold_multiplier": 1.0,     # 다른 카메라 매칭 임계값 배수 (기본 임계값에 곱해짐)
+        "threshold_multiplier": 0.7,     # 다른 카메라 매칭 임계값 배수 (기본 임계값에 곱해짐)
                                         # 계산식: threshold * 1.0 = 0.8
                                         # 더 엄격하게 하려면: 1.2 → 0.8 * 1.2 = 0.96
                                         # 더 관대하게 하려면: 0.8 → 0.8 * 0.8 = 0.64
@@ -158,11 +158,13 @@ CAMERA_CONFIGS = {
 
 # 로깅 설정 (원본과 동일)
 LOGGING_CONFIG = {
-    "level": "INFO",
+    "level": "DEBUG",  # INFO, DEBUG, WARNING, ERROR 중 선택
     "show_debug": True,
     "show_coordinates": True,
     "show_reid_matches": True,
     "show_disappearing_objects": True,
+    "reid_detailed_logging": True,  # ReID 매칭 과정 상세 로깅
+    "similarity_detailed_logging": True,  # 유사도 계산 상세 로깅
 }
 
 # 성능 설정 (원본과 동일)

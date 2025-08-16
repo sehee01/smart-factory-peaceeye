@@ -42,15 +42,13 @@ class FeatureStoreRedisHandler:
         """
         신규 스키마 키 생성자.
         - 선호: global_track_data:{global_id}:{camera_id}:{local_track_id}
-        - (이전 레거시) global_track_data:{global_id}
         """
-        if camera_id is not None and local_track_id is not None:
-            return f"global_track_data:{global_id}:{camera_id}:{local_track_id}"
-        # 레거시: 주석 처리 대상이지만 하위호환 호출을 위해 남겨둠
-        return f"global_track_data:{global_id}"
+
+        return f"global_track_data:{global_id}:{camera_id}:{local_track_id}"
+    
 
     def store_feature(self, global_id: int, camera_id: str, local_track_id: int, feature: np.ndarray):
-        """기본 feature 저장 (하위 호환성)"""
+        """기본 feature 저장"""
         key = self._make_track_key(global_id, camera_id, local_track_id)
         data = pickle.dumps(feature)
         with self.lock:
@@ -60,7 +58,7 @@ class FeatureStoreRedisHandler:
                                   feature: np.ndarray, bbox: List[int],
                                   global_frame_counter: int,
                                   local_track_id: Optional[int] = None):
-        """메타데이터와 함께 feature 저장 (신규 per-cam-local 키만 사용)"""
+        """메타데이터와 함께 feature 저장 """
 
         camera_id_str = str(camera_id)
         # 신규 스키마 키를 기존 변수명인 data_key로 사용
@@ -161,31 +159,58 @@ class FeatureStoreRedisHandler:
         except Exception as e:
             print(f"Redis: Failed to create pre-registered track: {str(e)}")
 
-    def get_candidate_features(self, exclude_camera: str = None) -> Dict[int, np.ndarray]:
-        """기본 candidate features 조회 (하위 호환성)"""
+    def get_candidate_features(self, exclude_camera: str = None) -> Dict[int, Dict]:
         result = {}
-        keys = self.redis.keys("global_track:*")
-        for key in keys:
-            try:
-                key_parts = key.decode().split(":")  # format: global_track:{id}:{camera_id}:{track_id}
-                global_id = int(key_parts[1])
-                camera_id = key_parts[2]
-                if exclude_camera and camera_id == exclude_camera:
+        
+        if exclude_camera:
+            # exclude_camera가 아닌 다른 카메라들만 조회
+            all_keys = self.redis.keys("global_track_data:*:*:*")
+            
+            for raw_key in all_keys:
+                try:
+                    key_parts = raw_key.decode().split(":")
+                    if len(key_parts) != 4:
+                        continue
+                        
+                    global_id = int(key_parts[1])
+                    camera_id = key_parts[2]
+                    
+                    # exclude_camera 조건 확인
+                    if camera_id == exclude_camera:
+                        continue
+                    
+                    # 값 로드 및 처리
+                    track_data = self.redis.get(raw_key)
+                    if not track_data:
+                        continue
+                        
+                    track_info = pickle.loads(track_data)
+                    if not isinstance(track_info, dict):
+                        continue
+                    
+                    # 병합: 동일 global_id의 여러 local_track_id를 하나로
+                    entry = result.get(global_id, {'features': [], 'bbox': [0, 0, 0, 0], 'last_seen': 0})
+                    features = track_info.get('features', [])
+                    if isinstance(features, list):
+                        entry['features'].extend(features)
+                    last_seen = int(track_info.get('last_seen', 0))
+                    if last_seen >= entry.get('last_seen', 0):
+                        entry['last_seen'] = last_seen
+                        entry['bbox'] = track_info.get('last_bbox', entry['bbox'])
+                    result[global_id] = entry
+                        
+                except Exception as e:
                     continue
-
-                data = self.redis.get(key)
-                if data:
-                    feature = pickle.loads(data)
-                    result[global_id] = feature
-            except Exception as e:
-                continue  # skip malformed or expired keys
+        
         return result
 
     def get_candidate_features_by_camera(self, camera_id: str) -> Dict[int, Dict]:
         """특정 카메라의 candidate features 조회 (신규 per-cam-local 키 형식 사용)"""
         result: Dict[int, Dict] = {}
-        # 신규 스키마 키 패턴만 조회
-        data_keys = self.redis.keys("global_track_data:*:*:*")
+        
+        # 특정 카메라의 키만 조회 (최적화)
+        pattern = f"global_track_data:*:{camera_id}:*"
+        data_keys = self.redis.keys(pattern)
 
         print(f"Redis: Searching for candidates in camera {camera_id}, found {len(data_keys)} data keys")
 
@@ -199,10 +224,10 @@ class FeatureStoreRedisHandler:
                     continue
 
                 global_id = int(key_parts[1])
-                camera_id_str = str(camera_id)
-                key_camera = key_parts[2]
-                if key_camera != camera_id_str:
-                    continue
+                # camera_id 확인 불필요 (이미 패턴으로 필터링됨)
+                # key_camera = key_parts[2]
+                # if key_camera != camera_id_str:
+                #     continue
 
                 # 값 로드
                 track_data = self.redis.get(data_key)
