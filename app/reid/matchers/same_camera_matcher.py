@@ -132,7 +132,7 @@ class SameCameraMatcher:
                 
                 # 위치가 가까우면 유사도에 보너스 추가 (위치 점수가 높을수록)
                 if location_score > 0.8:  # 위치가 매우 가까우면
-                    location_bonus = min(0.1, location_score * 0.1)  # 최대 0.1까지
+                    location_bonus = min(0.05, location_score * 0.05)  # 최대 0.1까지
                     adjusted_similarity = feature_similarity + location_bonus
                     logger.info(f"🎁 후보 {global_id}: 위치 보너스 +{location_bonus:.4f} 적용")
                     logger.info(f"📊 후보 {global_id}: 원본={feature_similarity:.4f}, 보너스=+{location_bonus:.4f}, 조정됨={adjusted_similarity:.4f}, 위치점수={location_score:.4f}")

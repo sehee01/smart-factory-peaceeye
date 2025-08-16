@@ -1,7 +1,7 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/yolo11s.pt"
+YOLO_MODEL_PATH = "models/weights/yolo11x.pt"
 
 # BYTETracker 설정 (원본과 동일)
 TRACKER_CONFIG = {
@@ -51,7 +51,7 @@ REID_CONFIG = {
     
     # 다른 카메라간 매칭 설정
     "cross_camera": {
-        "threshold_multiplier": 0.7,     # 다른 카메라 매칭 임계값 배수 (기본 임계값에 곱해짐)
+        "threshold_cross": 0.7,     # 다른 카메라 매칭 임계값 배수 (기본 임계값에 곱해짐)
                                         # 계산식: threshold * 1.0 = 0.8
                                         # 더 엄격하게 하려면: 1.2 → 0.8 * 1.2 = 0.96
                                         # 더 관대하게 하려면: 0.8 → 0.8 * 0.8 = 0.64

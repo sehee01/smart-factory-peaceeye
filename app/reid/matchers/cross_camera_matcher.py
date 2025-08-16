@@ -38,17 +38,14 @@ class CrossCameraMatcher:
             self.threshold = similarity_threshold
             
         # cross_camera 관련 설정값들
-        self.threshold_multiplier = settings.REID_CONFIG["cross_camera"]["threshold_multiplier"]
+        self.threshold_cross = settings.REID_CONFIG["cross_camera"]["threshold_cross"]
         self.weight_start = settings.REID_CONFIG["cross_camera"]["weight_start"]
         self.weight_end = settings.REID_CONFIG["cross_camera"]["weight_end"]
         
-        # 실제 사용할 임계값 계산
-        self.adjusted_threshold = self.threshold * self.threshold_multiplier
         
         logger.info(f"🔧 CrossCameraMatcher 초기화 완료")
-        logger.info(f"  - 기본 임계값: {self.threshold}")
-        logger.info(f"  - 임계값 배수: {self.threshold_multiplier}")
-        logger.info(f"  - 조정된 임계값: {self.adjusted_threshold:.4f}")
+
+        logger.info(f"  -  임계값: {self.threshold_cross:.4f}")
         logger.info(f"  - 가중치 범위: {self.weight_start} ~ {self.weight_end}")
     
     def match(self, features: np.ndarray, bbox: List[int], camera_id: str, 
@@ -117,16 +114,16 @@ class CrossCameraMatcher:
                 context = f"cross_camera_{camera_id}_to_{candidate_camera}_track_{global_id}"
                 similarity = self.similarity.calculate_similarity(features, weighted_average, context)
                 
-                logger.info(f"🎯 후보 {global_id}: 유사도 = {similarity:.4f}, 조정된 임계값 = {self.adjusted_threshold:.4f}")
+                logger.info(f"🎯 후보 {global_id}: 유사도 = {similarity:.4f}, cross_camera 임계값 = {self.threshold_cross:.4f}")
                 
                 # 다른 카메라는 조정된 임계값 사용
-                if similarity > best_similarity and similarity > self.adjusted_threshold:
+                if similarity > best_similarity and similarity > self.threshold_cross:
                     best_similarity = similarity
                     best_match_id = global_id
                     logger.info(f"🏆 후보 {global_id}: 새로운 최고 매치! (유사도: {similarity:.4f})")
                 else:
-                    if similarity <= self.adjusted_threshold:
-                        logger.warning(f"❌ 후보 {global_id}: 유사도 {similarity:.4f} <= 조정된 임계값 {self.adjusted_threshold:.4f}")
+                    if similarity <= self.threshold_cross:
+                        logger.warning(f"❌ 후보 {global_id}: 유사도 {similarity:.4f} <= cross_camera 임계값 {self.threshold_cross:.4f}")
                     if similarity <= best_similarity:
                         logger.info(f"📉 후보 {global_id}: 유사도 {similarity:.4f} <= 현재 최고 {best_similarity:.4f}")
             else:
