@@ -1,16 +1,18 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/yolo11x.pt"
+YOLO_MODEL_PATH = "models/weights/yolo11n.pt"
 
-# BYTETracker 설정 (원본과 동일)
+# BYTETracker 설정 (Ultralytics 기본값과 동일)
 TRACKER_CONFIG = {
-    "track_thresh": 0.5,
-    "match_thresh": 0.8,
-    "track_buffer": 3000,
-    "mot20": False,
-    "frame_rate": 15,
-    "target_width": 640,  # 프레임 리사이즈 목표 너비
+    "track_thresh": 0.6,                    # Ultralytics 기본값: 0.6 (탐지 신뢰도 임계값)
+    "match_thresh": 0.9,                    # Ultralytics 기본값: 0.9 (IOU 매칭 임계값)
+    "track_buffer": 30,                     # Ultralytics 기본값: 30 (트랙 유지 프레임 수)
+    "mot20": False,                         # Ultralytics 기본값: False (MOT20 데이터셋 사용 여부)
+    "frame_rate": 30,                       # Ultralytics 기본값: 30 (프레임 레이트)
+    "target_width": 640,                    # 프레임 리사이즈 목표 너비
+    "aspect_ratio_thresh": 1.6,            # Ultralytics 기본값: 1.6 (종횡비 임계값)
+    "min_box_area": 100,                   # Ultralytics 기본값: 100 (최소 박스 면적)
 }
 
 # Redis 설정 (글로벌 연결 설정)
@@ -80,7 +82,7 @@ REID_CONFIG = {
 # 입력 비디오 경로 (원본과 동일)
 VIDEO_INPUT_PATHS = [
     "test_video/TEST1.mp4",
-    "test_video/TEST2.mp4"
+    "test_video/TEST3.mp4"
 ]
 
 # 카메라별 호모그래피 매트릭스 (Ground Truth 캘리브레이션)

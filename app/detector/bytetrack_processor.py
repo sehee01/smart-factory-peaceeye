@@ -5,13 +5,14 @@ from ByteTrack.yolox.tracker.byte_tracker import BYTETracker
 
 class ByteTrackProcessor:
     def __init__(self, tracker_config: dict):
+        # Ultralytics ByteTrack 기본값과 동일하게 설정
         args = SimpleNamespace(
-            track_thresh=tracker_config.get("track_thresh", 0.5),
-            match_thresh=tracker_config.get("match_thresh", 0.8),
-            track_buffer=tracker_config.get("track_buffer", 30),
-            aspect_ratio_thresh=tracker_config.get("aspect_ratio_thresh", 1.6),
-            min_box_area=tracker_config.get("min_box_area", 10),
-            mot20=tracker_config.get("mot20", False),
+            track_thresh=tracker_config.get("track_thresh", 0.6),      # Ultralytics 기본값: 0.6
+            match_thresh=tracker_config.get("match_thresh", 0.9),      # Ultralytics 기본값: 0.9
+            track_buffer=tracker_config.get("track_buffer", 30),       # Ultralytics 기본값: 30
+            aspect_ratio_thresh=tracker_config.get("aspect_ratio_thresh", 1.6),  # Ultralytics 기본값: 1.6
+            min_box_area=tracker_config.get("min_box_area", 100),     # Ultralytics 기본값: 100
+            mot20=tracker_config.get("mot20", False),                 # Ultralytics 기본값: False
         )
         self.frame_rate = tracker_config.get("frame_rate", 30)
         self.tracker = BYTETracker(args, frame_rate=self.frame_rate)
