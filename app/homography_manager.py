@@ -72,10 +72,23 @@ class HomographyManager:
             return x, y
         
         try:
+            # 입력 좌표 검증
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                print(f"Warning: Invalid coordinates for camera {camera_id}: x={x}, y={y}")
+                return x, y
+            
             # 1단계: 호모그래피 변환 (카메라 좌표 → 실제 지면 좌표)
-            point = np.array([[x, y]], dtype=np.float32)
-            transformed = cv2.perspectiveTransform(point, self.homography_matrices[camera_id])
-            real_x, real_y = transformed[0][0], transformed[0][1]
+            # OpenCV perspectiveTransform은 Nx1x2 형태의 포인트 배열을 요구
+            point = np.array([[[x, y]]], dtype=np.float32)  # ← 수정: 3차원 배열로 변경
+            
+            # 호모그래피 매트릭스 검증
+            homography_matrix = self.homography_matrices[camera_id]
+            if homography_matrix.shape != (3, 3):
+                print(f"Error: Invalid homography matrix shape for camera {camera_id}: {homography_matrix.shape}")
+                return x, y
+            
+            transformed = cv2.perspectiveTransform(point, homography_matrix)
+            real_x, real_y = transformed[0][0][0], transformed[0][0][1]  # ← 수정: 3차원 배열에서 값 추출
             
             # 2단계: Unity 맵 4개 좌표로 변환
             if camera_id in self.unity_map_corners:
@@ -107,7 +120,6 @@ class HomographyManager:
                           unity_corners[2]["y"] * norm_x * norm_y +               # 오른쪽 하단
                           unity_corners[3]["y"] * (1 - norm_x) * norm_y)          # 왼쪽 하단
                 
-                print(f"[UNITY] Camera {camera_id}: Image({x:.1f}, {y:.1f}) -> Real({real_x:.3f}, {real_y:.3f}) -> Norm({norm_x:.3f}, {norm_y:.3f}) -> Unity({unity_x:.1f}, {unity_y:.1f})")
                 return unity_x, unity_y
             else:
                 print(f"Warning: No Unity corners for camera {camera_id}")
@@ -115,6 +127,10 @@ class HomographyManager:
                 
         except Exception as e:
             print(f"Coordinate transformation failed: {e}")
+            # 디버깅을 위한 추가 정보 출력
+            print(f"  Camera ID: {camera_id}")
+            print(f"  Input coordinates: x={x}, y={y}")
+            print(f"  Homography matrix shape: {self.homography_matrices[camera_id].shape if camera_id in self.homography_matrices else 'Not found'}")
             return x, y
     
     def get_calibration_info(self, camera_id):

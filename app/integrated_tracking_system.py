@@ -237,15 +237,14 @@ class IntegratedTrackingSystem:
             }
             
             for det in detections:
+                # NumPy 타입을 Python 기본 타입으로 변환
                 worker_info = {
-                    "workerID": det["workerID"],
-                    "cameraID": det["cameraID"],
-                    "position": {
-                        "x": det["position_X"],
-                        "y": det["position_Y"]
-                    },
-                    "frame_id": det["frame_id"],
-                    "local_id": det["local_id"]
+                    "worker_id": str(det["workerID"]),
+                    "zone_id": f"Z{det['cameraID']:02d}",
+                    "x": float(det["position_X"]),  # float32를 float로 변환
+                    "y": float(det["position_Y"]),  # float32를 float로 변환
+                    "product_count": 0,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
                 worker_data["workers"].append(worker_info)
             
@@ -256,8 +255,17 @@ class IntegratedTrackingSystem:
         if violations:
             violation_data = {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "violations": violations
+                "violations": []
             }
+            
+            for violation in violations:
+                violation_entry = {
+                    "worker_id": str(violation["worker_id"]),
+                    "zone_id": str(violation["zone_id"]),
+                    "timestamp": str(violation["timestamp"]),
+                    "violations": violation["violations"]
+                }
+                violation_data["violations"].append(violation_entry)
             
             # 백엔드로 전송
             self.backend_client.send_violation_data(violation_data)

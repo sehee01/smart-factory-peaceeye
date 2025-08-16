@@ -9,12 +9,18 @@ async function saveToSQLite(data) {
     // [1] workers 저장
     if (Array.isArray(data.workers)) {
       for (const w of data.workers) {
+        // 필수 필드 검증
+        if (!w.worker_id || w.x === undefined || w.y === undefined) {
+          console.warn("[DB WARNING] Skipping worker with missing data:", w);
+          continue;
+        }
+        
         await trx("worker_details").insert({
           worker_id: w.worker_id,
-          zone_id: w.zone_id,
+          zone_id: w.zone_id || "Z00",
           x: w.x,
           y: w.y,
-          product_count: w.product_count,
+          product_count: w.product_count || 0,
           timestamp: w.timestamp || now,
         });
       }
