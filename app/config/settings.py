@@ -1,7 +1,7 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/yolo11m.pt"
+YOLO_MODEL_PATH = "models/weights/yolo11s.pt"
 
 # BYTETracker 설정 (원본과 동일)
 TRACKER_CONFIG = {
@@ -79,8 +79,8 @@ REID_CONFIG = {
 
 # 입력 비디오 경로 (원본과 동일)
 VIDEO_INPUT_PATHS = [
-    "test_video/final01.mp4",
-    "test_video/final02.mp4"
+    "test_video/TEST1.mp4",
+    "test_video/TEST2.mp4"
 ]
 
 # 카메라별 호모그래피 매트릭스 (Ground Truth 캘리브레이션)
