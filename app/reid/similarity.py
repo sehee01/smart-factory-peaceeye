@@ -50,7 +50,6 @@ class FeatureSimilarityCalculator:
         vectors = np.array(list(candidates.values()))
 
         logger.info(f"🔍 {len(candidates)}개 후보에 대해 매칭 시작")
-        logger.info(f"📊 입력 feature shape: {feature.shape}, threshold: {threshold:.3f}")
 
         dists = cdist([feature], vectors, metric='cosine')[0]
         min_index = np.argmin(dists)
@@ -81,7 +80,6 @@ class FeatureSimilarityCalculator:
         :param context: 계산 컨텍스트 (디버깅용)
         :return: cosine 유사도 (0~1, 높을수록 유사)
         """
-        logger.info(f"🔍 유사도 계산 시작 - 컨텍스트: {context}")
         
         # 입력 검증
         if feature1 is None or feature2 is None:
@@ -102,10 +100,7 @@ class FeatureSimilarityCalculator:
         # 입력 차원 확인 및 정규화
         feature1_flat = feature1.flatten()  # 1차원으로 평탄화
         feature2_flat = feature2.flatten()  # 1차원으로 평탄화
-        
-        logger.info(f"📊 {context}: feature1 shape={feature1_flat.shape}, dtype={feature1_flat.dtype}")
-        logger.info(f"📊 {context}: feature2 shape={feature2_flat.shape}, dtype={feature2_flat.dtype}")
-        
+    
         # 차원 확인
         if feature1_flat.shape != feature2_flat.shape:
             logger.error(f"❌ {context}: 차원 불일치 - feature1: {feature1_flat.shape}, feature2: {feature2_flat.shape}")
@@ -114,9 +109,6 @@ class FeatureSimilarityCalculator:
         # 정규화
         feature1_norm = feature1_flat / np.linalg.norm(feature1_flat)
         feature2_norm = feature2_flat / np.linalg.norm(feature2_flat)
-        
-        logger.info(f"📏 {context}: 정규화 후 feature1 norm={np.linalg.norm(feature1_norm):.6f}")
-        logger.info(f"📏 {context}: 정규화 후 feature2 norm={np.linalg.norm(feature2_norm):.6f}")
         
         # cosine 유사도 계산
         similarity = 1 - cdist([feature1_norm], [feature2_norm], metric='cosine')[0][0]
@@ -130,7 +122,6 @@ class FeatureSimilarityCalculator:
             'timestamp': np.datetime64('now')
         })
         
-        logger.info(f"🎯 {context}: 최종 유사도 = {similarity:.4f}")
         
         return similarity
 
