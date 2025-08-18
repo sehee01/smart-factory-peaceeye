@@ -1,28 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Unity, useUnityContext } from 'react-unity-webgl';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-// 파일 경로: src/pages/Dashboard.jsx
 
-// 0. Unity 빌드 파일 경로 (public 폴더 기준)
+// Unity 빌드 파일 경로 (public 폴더 기준)
 const unityBuildFolder = "/Build";
-const unityBuildJson = "Build.loader.js"; // 본인 파일명에 맞게 확인
+const unityBuildJson = "Build.loader.js"; 
 
 function Dashboard() {
   const [user, setUser] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const navigate = useNavigate();
 
-  // 1. react-unity-webgl 설정
+  // react-unity-webgl 설정
   const { unityProvider, isLoaded, loadingProgression } = useUnityContext({
-    //0. Unity 빌드 파일 경로 참고할 것
+    // Unity 빌드 파일 경로 참고할 것
     loaderUrl: `${unityBuildFolder}/${unityBuildJson}`,
-    dataUrl: "/unity/Build/Build.data",
-    frameworkUrl: "/unity/Build/Build.framework.js",
-    codeUrl: "/unity/Build/Build.wasm",
+    dataUrl: "/unity/Build/Build.data.unityweb",
+    frameworkUrl: "/unity/Build/Build.framework.js.unityweb",
+    codeUrl: "/unity/Build/Build.wasm.unityweb",
   });
 
-  // 2. 로그인 상태 확인 (백엔드 쿠키 기반 JWT 인증)
+  // 로그인 상태 확인 (백엔드 쿠키 기반 JWT 인증)
   useEffect(() => {
     axios.get('http://localhost:5000/me', {
       withCredentials: true
@@ -37,8 +36,8 @@ function Dashboard() {
     });
   }, [navigate]);
 
-  // 3. Unity로부터 로그아웃 신호를 처리하는 함수
-  const handleLogoutFromUnity = async () => {
+  // Unity로부터 로그아웃 신호를 처리하는 함수
+  const handleLogoutFromUnity = useCallback(async () => {
     console.log("Unity로부터 로그아웃 신호를 받았습니다.");
     try {
       await axios.post("http://localhost:5000/logout", {}, {
@@ -51,15 +50,15 @@ function Dashboard() {
       alert("로그아웃에 실패했습니다. 관리자에게 문의하세요.");
       navigate("/");
     }
-  };
+  }, [navigate]);
 
-  // 4. Unity가 호출할 함수를 전역(window)에 등록
+  // Unity가 호출할 함수를 전역(window)에 등록
   useEffect(() => {
     window.handleUnityLogout = handleLogoutFromUnity;
     return () => {
       delete window.handleUnityLogout;
     };
-  }, []); // 이 useEffect는 처음 한 번만 실행되면 되므로 의존성 배열을 비워둡니다.
+  }, [handleLogoutFromUnity]); 
 
   // 인증 확인 중일 때 로딩 메시지 표시
   if (isAuthenticating) {
