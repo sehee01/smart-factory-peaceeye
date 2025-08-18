@@ -360,9 +360,19 @@ function toCSV(headers, rows) {
  * - dataset: ongoing | team | worker | risk
  * - 컬럼은 접두사로 구분(ong_, team_, wrk_, risk_)
  */
+// 유틸: RFC 5987용 filename* 인코딩
+function encodeRFC5987ValueChars(str) {
+  return encodeURIComponent(str)
+    .replace(/['()]/g, escape)
+    .replace(/\*/g, "%2A");
+}
+
 async function exportCsv(req, res) {
   try {
-    const hours = Number.isFinite(+req.query.hours) ? +req.query.hours : 24;
+    // --- 입력 가드 ---
+    const rawHours = Number.isFinite(+req.query.hours) ? +req.query.hours : 24;
+    const hours = Math.min(Math.max(rawHours, 1), 24 * 7); // 1~168시간 제한
+
     const sinceISO = new Date(Date.now() - hours * 3600 * 1000).toISOString();
     const dayStartISO = new Date(new Date().toISOString().slice(0,10) + "T00:00:00.000Z").toISOString();
 
@@ -555,9 +565,25 @@ async function exportCsv(req, res) {
     }
 
     const csv = toCSV(headers, rows);
+
+    // --- 다운로드 헤더 ---
+    const filename = `dashboard_all_${hours}h.csv`;
+    const filenameStar = encodeRFC5987ValueChars(filename);
+    
+    // Excel 한글/UTF-8 대응을 위해 BOM 추가
+    const BOM = "\uFEFF";
+    const payload = BOM + csv;
+
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename=dashboard_all_${hours}h.csv`);
-    return res.send(csv);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"; filename*=UTF-8''${filenameStar}`
+    );
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    return res.status(200).send(payload);
   } catch (err) {
     console.error("[export-combined ERROR]", err);
     res.status(500).json({ error: "CSV_COMBINED_EXPORT_FAILED" });
