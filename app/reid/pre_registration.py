@@ -156,7 +156,7 @@ class PreRegistrationManager:
     
     def _find_image_files(self, folder_path: Path) -> List[Path]:
         """
-        폴더에서 이미지 파일들을 찾기
+        폴더에서 이미지 파일들을 찾기 (중복 제거)
         
         Args:
             folder_path: 이미지 폴더 경로
@@ -164,15 +164,23 @@ class PreRegistrationManager:
         Returns:
             이미지 파일 경로 리스트
         """
-        # 지원하는 이미지 확장자
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.JPG', '.JPEG', '.PNG', '.BMP', '.TIFF', '.TIF'}
+        # 지원하는 이미지 확장자 (소문자만 사용)
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
         
-        image_files = []
+        image_files = set()  # 중복 제거를 위해 set 사용
+        
         for ext in image_extensions:
-            image_files.extend(folder_path.glob(f"*{ext}"))
+            # 소문자 확장자로 검색
+            files = list(folder_path.glob(f"*{ext}"))
+            image_files.update(files)
+            
+            # 대문자 확장자로도 검색 (대소문자 구분 없는 시스템을 위해)
+            upper_ext = ext.upper()
+            files_upper = list(folder_path.glob(f"*{upper_ext}"))
+            image_files.update(files_upper)
         
-        # 파일명으로 정렬 (10_1, 10_2, ... 순서)
-        image_files.sort(key=lambda x: x.name)
+        # set을 list로 변환하고 파일명으로 정렬
+        image_files = sorted(list(image_files), key=lambda x: x.name)
         
         return image_files
     
