@@ -6,14 +6,14 @@ PRE_REGISTER_MODEL_PATH = "models/weights/yolo11m.pt"
 
 # BYTETracker 설정 (Ultralytics 기본값과 동일)
 TRACKER_CONFIG = {
-    "track_thresh": 0.5,                    # Ultralytics 기본값: 0.6 (탐지 신뢰도 임계값)
-    "match_thresh": 0.9,                    # Ultralytics 기본값: 0.9 (IOU 매칭 임계값)
-    "track_buffer": 30,                     # Ultralytics 기본값: 30 (트랙 유지 프레임 수)
-    "mot20": False,                         # Ultralytics 기본값: False (MOT20 데이터셋 사용 여부)
-    "frame_rate": 15,                       # Ultralytics 기본값: 30 (프레임 레이트)
-    "target_width": 640,                    # 프레임 리사이즈 목표 너비
-    "aspect_ratio_thresh": 1.6,            # Ultralytics 기본값: 1.6 (종횡비 임계값)
-    "min_box_area": 100,                   # Ultralytics 기본값: 100 (최소 박스 면적)
+    # "track_thresh": 0.0,                    # Ultralytics 기본값: 0.6 (탐지 신뢰도 임계값)
+    # "match_thresh": 0.9,                    # Ultralytics 기본값: 0.9 (IOU 매칭 임계값)
+    # "track_buffer": 30,                     # Ultralytics 기본값: 30 (트랙 유지 프레임 수)
+    # "mot20": False,                         # Ultralytics 기본값: False (MOT20 데이터셋 사용 여부)
+    # "frame_rate": 15,                       # Ultralytics 기본값: 30 (프레임 레이트)
+    # "target_width": 640,                    # 프레임 리사이즈 목표 너비
+    # "aspect_ratio_thresh": 1.6,            # Ultralytics 기본값: 1.6 (종횡비 임계값)
+    # "min_box_area": 100,                   # Ultralytics 기본값: 100 (최소 박스 면적)
 }
 
 # Redis 설정 (글로벌 연결 설정)
@@ -33,7 +33,7 @@ REID_CONFIG = {
     
     # 사전 등록 매칭 설정
     "pre_registration": {
-        "similarity_threshold": 0.65,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
+        "similarity_threshold": 0.66,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
         "min_matching_features": 2,      # 최소 매칭되어야 할 feature 개수 (1~5 권장)
         "max_features_per_id": 10,       # Global ID당 최대 feature 개수 (고정값)
     },
@@ -54,7 +54,7 @@ REID_CONFIG = {
     
     # 다른 카메라간 매칭 설정
     "cross_camera": {
-        "threshold_cross": 0.7,     # 다른 카메라 매칭 임계값 배수 (기본 임계값에 곱해짐)
+        "threshold_cross": 0.8,     # 다른 카메라 매칭 임계값 
                                         # 계산식: threshold * 1.0 = 0.8
                                         # 더 엄격하게 하려면: 1.2 → 0.8 * 1.2 = 0.96
                                         # 더 관대하게 하려면: 0.8 → 0.8 * 0.8 = 0.64

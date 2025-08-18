@@ -335,6 +335,59 @@ class FeatureStoreRedisHandler:
                         self._remove_track(gid)
                         # print(f"Redis: Expired track {gid} (default TTL)")
 
+    def cleanup_duplicate_tracks_for_global_id(self, global_id: int, camera_id: str):
+        """
+        특정 global_id와 camera_id에 대해 중복 키들을 정리
+        새 매칭이 완료된 후 호출되어 기존 키들을 삭제하고 가장 최근 것만 유지
+        
+        Args:
+            global_id: 정리할 글로벌 ID
+            camera_id: 정리할 카메라 ID
+        """
+        try:
+            # 해당 global_id와 camera_id의 모든 키 조회
+            pattern = f"global_track_data:{global_id}:{camera_id}:*"
+            keys = self.redis.keys(pattern)
+            
+            if len(keys) <= 1:
+                # 키가 1개 이하면 정리할 필요 없음
+                return 0
+            
+            # 가장 큰 local_track_id 찾기
+            max_local_track_id = -1
+            max_key = None
+            
+            for raw_key in keys:
+                try:
+                    key_parts = raw_key.decode().split(":")
+                    if len(key_parts) == 4:
+                        local_track_id = int(key_parts[3])
+                        if local_track_id > max_local_track_id:
+                            max_local_track_id = local_track_id
+                            max_key = raw_key
+                except Exception as e:
+                    print(f"Redis: Error parsing key {raw_key}: {e}")
+                    continue
+            
+            if max_key is None:
+                return 0
+            
+            # 가장 큰 local_track_id를 제외한 나머지 키들 삭제
+            keys_to_delete = [key for key in keys if key != max_key]
+            
+            if keys_to_delete:
+                self.redis.delete(*keys_to_delete)
+                deleted_count = len(keys_to_delete)
+                print(f"Redis: Cleaned up {deleted_count} duplicate keys for global_id {global_id}, camera {camera_id}")
+                print(f"Redis: Kept key with local_track_id {max_local_track_id}")
+                return deleted_count
+            
+            return 0
+            
+        except Exception as e:
+            print(f"Redis: Error in cleanup_duplicate_tracks_for_global_id: {e}")
+            return 0
+
     def _remove_track(self, global_id: int):
         """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
 
