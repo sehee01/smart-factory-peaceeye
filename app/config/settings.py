@@ -1,8 +1,8 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/yolo11m.pt"
-# PRE_REGISTER_MODEL_PATH = "models/weights/yolo11x.pt"
+YOLO_MODEL_PATH = "models/weights/video.pt"
+PRE_REGISTER_MODEL_PATH = "models/weights/yolo11m.pt"
 
 # BYTETracker 설정 (Ultralytics 기본값과 동일)
 TRACKER_CONFIG = {

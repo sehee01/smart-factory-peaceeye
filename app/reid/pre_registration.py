@@ -46,7 +46,7 @@ class PreRegistrationManager:
         self.pre_img_path = Path(app_dir) / "pre_img"
         
         # YOLO 모델 초기화
-        model_path = settings.YOLO_MODEL_PATH
+        model_path = settings.PRE_REGISTER_MODEL_PATH
         self.yolo_model = YOLO(model_path, task="detect")
         self.class_names = self.yolo_model.names
         

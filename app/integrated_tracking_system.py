@@ -15,7 +15,6 @@ from image_processor import ImageProcessor
 from result.performance_logger import PerformanceLogger
 
 from ppe_detector import PPEDetector
-from homography_manager import HomographyManager
 from backend_client import BackendClient
 from models.mapping.point_transformer import transform_point
 
@@ -38,21 +37,8 @@ class IntegratedTrackingSystem:
         # 비디오 경로 설정
         self.video_paths = video_paths or settings.VIDEO_INPUT_PATHS
         
-        # 호모그래피 매니저 초기화
-        self.homography_manager = HomographyManager()
-        
         # PPE 탐지기 초기화
         self.ppe_detector = PPEDetector(ppe_model_path or "models/weights/best_yolo11n.pt")
-        
-        # 캘리브레이션 파일 로드 (명령행 인자 우선, 없으면 settings에서 자동 로드)
-        if calibration_files:
-            for camera_id, calib_file in calibration_files.items():
-                self.homography_manager.add_camera_calibration(camera_id, calib_file)
-        else:
-            # settings.py에서 자동으로 호모그래피 매트릭스 로드
-            for camera_id, matrix in settings.HOMOGRAPHY_MATRICES.items():
-                self.homography_manager.homography_matrices[camera_id] = np.array(matrix)
-                print(f"Camera {camera_id} homography matrix loaded from settings")
         
         # 백엔드 클라이언트 초기화
         self.backend_client = BackendClient(backend_url or "http://localhost:5000")
@@ -86,10 +72,11 @@ class IntegratedTrackingSystem:
         print(f"PPE Model: {ppe_model_path or 'models/weights/best_yolo11n.pt'}")
         print(f"Backend URL: {backend_url or 'http://localhost:5000'}")
         
-        # 로드된 호모그래피 매트릭스 정보 출력
-        print(f"Loaded homography matrices for cameras: {list(self.homography_manager.homography_matrices.keys())}")
-        for camera_id in self.homography_manager.homography_matrices.keys():
-            print(f"  Camera {camera_id}: Matrix shape {self.homography_manager.homography_matrices[camera_id].shape}")
+        # 호모그래피 매트릭스 정보 출력 (settings에서 직접 로드)
+        print(f"Homography matrices available for cameras: {list(settings.HOMOGRAPHY_MATRICES.keys())}")
+        for camera_id in settings.HOMOGRAPHY_MATRICES.keys():
+            matrix = np.array(settings.HOMOGRAPHY_MATRICES[camera_id])
+            print(f"  Camera {camera_id}: Matrix shape {matrix.shape}")
     
     def create_detector_for_thread(self):
         """스레드별 독립적인 detector 생성"""
