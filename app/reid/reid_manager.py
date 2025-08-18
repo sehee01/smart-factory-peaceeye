@@ -96,46 +96,6 @@ class GlobalReIDManager:
         
         # print(f"[DEBUG] Frame {self.global_frame_counter}: {len(current_tracking_tracks)} actively tracking")
 
-    def _detect_disappeared_tracks(self):
-        """사라진 객체를 감지하고 비활성 상태로 표시"""
-        # 현재 프레임에서 감지된 모든 트랙의 global_id 수집
-        current_active_tracks = set()
-        
-        # Redis에서 모든 트랙 데이터 조회
-        data_keys = self.redis.redis.keys("global_track_data:*:*:*")
-        
-        for key in data_keys:
-            try:
-                key_parts = key.decode().split(":")
-                if len(key_parts) != 4:
-                    continue
-                
-                global_id = int(key_parts[1])
-                camera_id = key_parts[2]
-                local_track_id = int(key_parts[3])
-                
-                # 현재 프레임에서 감지된 트랙인지 확인
-                track_data = self.redis.redis.get(key)
-                if track_data:
-                    track_info = pickle.loads(track_data)
-                    if isinstance(track_info, dict):
-                        last_seen = track_info.get('last_seen', 0)
-                        is_active = track_info.get('is_active', True)
-                        
-                        # 현재 프레임에서 감지된 트랙
-                        if last_seen == self.global_frame_counter:
-                            current_active_tracks.add(global_id)
-                        # 이전 프레임에서 감지되었지만 현재 프레임에서 감지되지 않은 트랙
-                        elif is_active and last_seen == self.global_frame_counter - 1:
-                            # 사라진 객체로 표시
-                            self.redis.mark_track_as_inactive(global_id, camera_id, local_track_id, self.global_frame_counter)
-                            
-            except Exception as e:
-                print(f"Error detecting disappeared tracks: {e}")
-                continue
-        
-        # print(f"[DEBUG] Frame {self.global_frame_counter}: {len(current_active_tracks)} active tracks detected")
-
     def match_or_create(self, features: np.ndarray, bbox: List[int], camera_id: str,
                         frame_id: int, frame_shape: tuple, matched_tracks: Optional[Set[int]] = None,
                         local_track_id: Optional[int] = None) -> Optional[int]:
