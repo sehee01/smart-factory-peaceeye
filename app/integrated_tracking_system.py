@@ -17,6 +17,7 @@ from result.performance_logger import PerformanceLogger
 from ppe_detector import PPEDetector
 from homography_manager import HomographyManager
 from backend_client import BackendClient
+from models.mapping.point_transformer import transform_point
 
 
 class IntegratedTrackingSystem:
@@ -166,8 +167,13 @@ class IntegratedTrackingSystem:
             # 좌표 변환
             x1, y1, x2, y2, point_x, point_y = self.image_processor.get_bbox_coordinates(bbox)
             
-            # 호모그래피 변환
-            real_x, real_y = self.homography_manager.transform_coordinates(camera_id, point_x, point_y)
+            # 호모그래피 변환 (point_transformer 사용)
+            try:
+                homography_matrix = np.array(settings.HOMOGRAPHY_MATRICES[camera_id])
+                real_x, real_y = transform_point(point_x, point_y, homography_matrix)
+            except Exception as e:
+                print(f"Error in coordinate transformation for camera {camera_id}: {e}")
+                real_x, real_y = 0, 0
             
             # PPE 위반 탐지
             ppe_violations = self.ppe_detector.detect_ppe_violations(frame, bbox)

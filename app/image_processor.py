@@ -193,7 +193,7 @@ class ImageProcessor:
     
     def get_bbox_coordinates(self, bbox: list) -> tuple:
         """
-        바운딩 박스에서 좌표 추출
+        바운딩 박스에서 좌표 추출 (발 위치 기준)
         
         Args:
             bbox: 바운딩 박스 [x1, y1, x2, y2]
@@ -202,6 +202,6 @@ class ImageProcessor:
             tuple: (x1, y1, x2, y2, center_x, center_y)
         """
         x1, y1, x2, y2 = map(int, bbox)
-        center_x = (x1 + x2) / 2
-        center_y = y1
+        center_x = (x1 + x2) / 2  # 가로 중앙
+        center_y = y2              # 하단 (발 위치) - 수정됨
         return x1, y1, x2, y2, center_x, center_y

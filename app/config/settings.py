@@ -1,7 +1,8 @@
 # config/settings.py
 
 # YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/video.pt"
+YOLO_MODEL_PATH = "models/weights/yolo11m.pt"
+# PRE_REGISTER_MODEL_PATH = "models/weights/yolo11x.pt"
 
 # BYTETracker 설정 (Ultralytics 기본값과 동일)
 TRACKER_CONFIG = {
@@ -87,22 +88,48 @@ VIDEO_INPUT_PATHS = [
 
 # 카메라별 호모그래피 매트릭스 (Ground Truth 캘리브레이션)
 HOMOGRAPHY_MATRICES = {
-    0: [  # 카메라 0 (final01)
-        [0.7847762310428954, 0.3986496280031731, -687.9335918297058],
-        [0.13638852207637203, 2.4575191107464778, -747.6641980290682],
-        [0.0003600314412025047, 0.0017273360188676749, 1.0]
+    0: [  # 카메라 0 (TEST100)
+        [
+            -0.7054058165407032,
+            -9.175014931008594,
+            360.7030953630252
+        ],
+        [
+            3.639540004543024,
+            6.908272367795101,
+            -3448.843643339362
+        ],
+        [
+            -8.88526112076813e-05,
+            -0.0031670698606516006,
+            1.0
+        ]
     ],
-    1: [  # 카메라 1 (final02)
-        [0.42683482169109593, 0.13506486490574895, -195.36722290518802],
-        [0.014427985459028674, 1.0866551153615753, -494.6262724476645],
-        [7.982404047916122e-05, 0.0004913407860199181, 1.0]
+    1: [  # 카메라 1 (TEST1)
+        
+       [
+            4.1963912058589194,
+            -42.47203313918037,
+            761.2894933693545
+        ],
+        [
+            -0.911343564699018,
+            -30.168272520102708,
+            14578.643632850666
+        ],
+        [
+            -7.233425744493245e-05,
+            -0.007065025908464806,
+            1.0
+        ]
+  
     ]
 }
 
 # Ground Truth 캘리브레이션 파일 경로
 CALIBRATION_FILES = {
-    0: "final01_ground_truth_calibration.json",
-    1: "final02_ground_truth_calibration.json"
+    0: "TEST100_ground_truth_calibration.json",
+    1: "TEST1_ground_truth_calibration.json"
 }
 
 # 기존 호모그래피 매트릭스 (하위 호환성을 위해 유지)
@@ -125,8 +152,8 @@ MULTITHREADING_CONFIG = {
 
 # GUI 설정 (원본과 동일)
 GUI_CONFIG = {
-    "window_width": 800,
-    "window_height": 600,
+    "window_width": 1920,
+    "window_height": 1080,
     "window_normal": True,  # 창 크기 조절 가능
     "display_fps": True,
     "show_coordinates": True,

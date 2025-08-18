@@ -72,12 +72,6 @@ def main():
         default="http://localhost:5000",
         help='Backend server URL.'
     )
-    parser.add_argument(
-        '--unity_corners',
-        nargs='+',
-        type=str,
-        help='Unity map corners for each camera in format "camera_id:x1,y1,x2,y2,x3,y3,x4,y4" (clockwise from top-left)'
-    )
     args = parser.parse_args()
     
     # 캘리브레이션 파일 매핑
@@ -111,25 +105,6 @@ def main():
         ppe_model_path=args.ppe_model
     )
     
-    # Unity 좌표 설정
-    if args.unity_corners:
-        for corner_str in args.unity_corners:
-            try:
-                # 형식: "camera_id:x1,y1,x2,y2,x3,y3,x4,y4"
-                camera_part, coords_part = corner_str.split(':', 1)
-                camera_id = int(camera_part)
-                coords = [float(x) for x in coords_part.split(',')]
-                
-                if len(coords) == 8:
-                    tracking_system.homography_manager.set_unity_map_corners_from_coords(
-                        camera_id, coords[0], coords[1], coords[2], coords[3], 
-                        coords[4], coords[5], coords[6], coords[7]
-                    )
-                else:
-                    print(f"Error: Need exactly 8 coordinates for camera {camera_id}")
-            except Exception as e:
-                print(f"Error parsing Unity corners: {corner_str}, Error: {e}")
-    
     print(f"▶ Processing {len(args.videos)} videos with integrated tracking and PPE detection")
     for i, video_path in enumerate(args.videos):
         print(f"  Camera {i}: {video_path}")
@@ -137,7 +112,6 @@ def main():
             print(f"    Calibration: {calibration_files[i]}")
         else:
             print(f"    Homography: Loaded from settings.py")
-        tracking_system.homography_manager.print_unity_corners(i)
     
     # 멀티 비디오 추적 실행
     all_detections, all_violations = tracking_system.run_multi_video_tracking()

@@ -12,24 +12,29 @@ def transform_point(pointx,pointz, homography_matrix):
 
     Returns:
         tuple: 변환된 실제 세계의 (x, y) 좌표입니다.
-               변환이 불가능한 경우 None을 반환합니다.
+               변환이 불가능한 경우 (0, 0)을 반환합니다.
     """
-    # 점을 동차 좌표(x, y, 1)로 변환합니다.
-    point_homogeneous = np.array([pointx, pointz, 1], dtype="float32")
+    try:
+        # 점을 동차 좌표(x, y, 1)로 변환합니다.
+        point_homogeneous = np.array([pointx, pointz, 1], dtype="float32")
 
-    # 행렬 곱셈을 사용하여 호모그래피 변환을 적용합니다.
-    transformed_point_homogeneous = homography_matrix @ point_homogeneous
+        # 행렬 곱셈을 사용하여 호모그래피 변환을 적용합니다.
+        transformed_point_homogeneous = homography_matrix @ point_homogeneous
 
-    # 마지막 요소(w)로 나누어 동차 좌표에서 데카르트 좌표로 다시 변환(정규화)합니다.
-    w = transformed_point_homogeneous[2]
-    if w == 0:
-        # 0으로 나누는 것을 방지합니다.
-        return None
+        # 마지막 요소(w)로 나누어 동차 좌표에서 데카르트 좌표로 다시 변환(정규화)합니다.
+        w = transformed_point_homogeneous[2]
+        if w == 0:
+            # 0으로 나누는 것을 방지합니다.
+            return (0, 0)
 
-    transformed_x = transformed_point_homogeneous[0] / w
-    transformed_y = transformed_point_homogeneous[1] / w
+        transformed_x = transformed_point_homogeneous[0] / w
+        transformed_y = transformed_point_homogeneous[1] / w
 
-    return transformed_x, transformed_y
+        return transformed_x, transformed_y
+    except Exception as e:
+        # 변환 중 오류 발생시 (0, 0) 반환
+        print(f"Coordinate transformation error: {e}")
+        return (0, 0)
 
 """
 --- 사용 예시 ---
