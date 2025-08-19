@@ -85,13 +85,25 @@ class UltralyticsTrackerManager:
         Returns:
             results: tracking 결과
         """
-        # YOLO tracking 추론 (GPU 사용 가능시 half precision 사용)
+        # tracker_config에서 설정 추출
+        track_thresh = self.tracker_config.get("track_thresh", 0.5)
+        match_thresh = self.tracker_config.get("match_thresh", 0.8)
+        track_buffer = self.tracker_config.get("track_buffer", 30)
+        mot20 = self.tracker_config.get("mot20", False)
+        frame_rate = self.tracker_config.get("frame_rate", 30)
+        aspect_ratio_thresh = self.tracker_config.get("aspect_ratio_thresh", 1.6)
+        min_box_area = self.tracker_config.get("min_box_area", 100)
+        
+        # YOLO tracking 추론 (tracker_config 설정 적용)
         results = self.model.track(
             frame, 
             verbose=False, 
             half=torch.cuda.is_available(),
             persist=True,  # 프레임 간 추적 상태 유지
-            tracker="bytetrack.yaml"  # Ultralytics의 ByteTrack 구현 사용
+            tracker="bytetrack.yaml",  # Ultralytics의 ByteTrack 구현 사용
+            conf=track_thresh,  # 탐지 신뢰도 임계값 적용
+            iou=match_thresh,   # IOU 매칭 임계값 적용
+            # ByteTrack 특정 설정들은 tracker.yaml 파일에서 관리됨
         )[0]
         return results
 

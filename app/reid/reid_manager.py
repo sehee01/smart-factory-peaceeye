@@ -189,11 +189,6 @@ class GlobalReIDManager:
             global_id, camera_id, frame_id, features, bbox,
             self.global_frame_counter, local_track_id
         )
-        
-        # 새 매칭이 완료된 후 중복 키들 정리
-        deleted_count = self.redis.cleanup_duplicate_tracks_for_global_id(global_id, camera_id)
-        if deleted_count > 0:
-            print(f"ReID: Cleaned up {deleted_count} duplicate keys after matching global_id {global_id} in camera {camera_id}")
 
     def _create_track(self, global_id: int, features: np.ndarray, bbox: List[int],
                       camera_id: str, frame_id: int, local_track_id: Optional[int] = None):
