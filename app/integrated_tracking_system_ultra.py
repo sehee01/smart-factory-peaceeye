@@ -53,6 +53,8 @@ class IntegratedTrackingSystemUltra:
         
         # 로컬 ID와 글로벌 ID 매핑 저장소
         self.local_to_global_mapping = {}
+        # 역방향 매핑: global_id -> {camera_id: max_local_id}
+        self.global_to_cameras = {}
         
         # ImageProcessor 초기화
         self.image_processor = ImageProcessor()
@@ -78,6 +80,76 @@ class IntegratedTrackingSystemUltra:
             matrix = np.array(settings.HOMOGRAPHY_MATRICES[camera_id])
             print(f"  Camera {camera_id}: Matrix shape {matrix.shape}")
     
+    def add_mapping(self, camera_id: str, local_id: int, global_id: int):
+        """매핑 추가 시 자동으로 중복 제거 - O(1) 최적화"""
+        # 타입 검증
+        camera_id = str(camera_id)
+        local_id = int(local_id)
+        global_id = int(global_id)
+        
+        # 기존 최대 local_id 확인
+        if (global_id in self.global_to_cameras and 
+            camera_id in self.global_to_cameras[global_id] and
+            local_id <= self.global_to_cameras[global_id][camera_id]):
+            return  # 더 작은 local_id는 무시
+        
+        # 기존 키 삭제 (조건 한 번만 체크)
+        if (global_id in self.global_to_cameras and 
+            camera_id in self.global_to_cameras[global_id]):
+            old_key = f"{camera_id}_{self.global_to_cameras[global_id][camera_id]}"
+            # 안전한 삭제
+            self.local_to_global_mapping.pop(old_key, None)
+        
+        # 새 매핑 추가
+        camera_key = f"{camera_id}_{local_id}"
+        self.local_to_global_mapping[camera_key] = global_id
+        
+        # 역방향 매핑 업데이트 (중복 제거)
+        if global_id not in self.global_to_cameras:
+            self.global_to_cameras[global_id] = {}
+        self.global_to_cameras[global_id][camera_id] = local_id
+
+    def _calculate_best_similarity(self, features: np.ndarray, camera_id: str) -> float:
+        """
+        주어진 feature에 대해 가장 높은 유사도를 가진 후보의 유사도를 반환
+        매칭 순서 최적화를 위해 사용
+        """
+        try:
+            # Redis에서 해당 카메라의 후보들 가져오기
+            candidates = self.reid.redis.get_candidate_features_by_camera(camera_id)
+            
+            if not candidates:
+                return 0.0
+            
+            best_similarity = 0.0
+            
+            for global_id, candidate_data in candidates.items():
+                candidate_features = candidate_data['features']
+                
+                if len(candidate_features) > 0:
+                    # 가중 평균 특징 계산
+                    features_array = np.array(candidate_features)
+                    if len(features_array) == 1:
+                        weighted_average = features_array[0]
+                    else:
+                        # 설정값 가져오기
+                        weight_start = settings.REID_CONFIG["same_camera"]["weight_start"]
+                        weight_end = settings.REID_CONFIG["same_camera"]["weight_end"]
+                        weights = np.linspace(weight_start, weight_end, len(features_array))
+                        weights = weights / np.sum(weights)
+                        weighted_average = np.average(features_array, axis=0, weights=weights)
+                    
+                    # 유사도 계산
+                    context = f"similarity_check_{camera_id}_track_{global_id}"
+                    similarity = self.reid.similarity.calculate_similarity(features, weighted_average, context)
+                    best_similarity = max(best_similarity, similarity)
+            
+            return best_similarity
+            
+        except Exception as e:
+            print(f"Error calculating best similarity: {e}")
+            return 0.0
+
     def create_detector_for_thread(self):
         """스레드별 독립적인 detector 생성 (Ultralytics Tracker 사용)"""
         return UltralyticsTrackerManager(self.model_path, self.tracker_config)
@@ -111,6 +183,8 @@ class IntegratedTrackingSystemUltra:
         # 객체 수 설정
         logger.set_object_count(len(track_list))
         
+        # 유사도 기반 매칭 순서 최적화
+        track_similarities = []
         for track in track_list:
             local_id = track["track_id"]
             bbox = track["bbox"]
@@ -118,9 +192,25 @@ class IntegratedTrackingSystemUltra:
             # Feature 추출
             crop, feature = self.image_processor.process_track_for_reid(frame, track)
             
-            # ReID 매칭
+            # 기존 매핑이 있으면 높은 우선순위
             camera_key = f"{camera_id}_{local_id}"
             if camera_key in self.local_to_global_mapping:
+                track_similarities.append((track, feature, 1.0, True))  # 기존 매핑은 최우선
+            else:
+                # 새로운 매칭의 경우 유사도 계산
+                best_similarity = self._calculate_best_similarity(feature, camera_id)
+                track_similarities.append((track, feature, best_similarity, False))
+        
+        # 유사도 순으로 정렬 (높은 순서대로)
+        track_similarities.sort(key=lambda x: x[2], reverse=True)
+        
+        for track, feature, similarity, is_existing in track_similarities:
+            local_id = track["track_id"]
+            bbox = track["bbox"]
+            
+            # ReID 매칭
+            camera_key = f"{camera_id}_{local_id}"
+            if is_existing:
                 # 기존 매핑 사용
                 global_id = self.local_to_global_mapping[camera_key]
                 logger.start_same_camera_reid_timing()
@@ -149,7 +239,10 @@ class IntegratedTrackingSystemUltra:
                 if global_id is None:
                     global_id = local_id
                 else:
-                    self.local_to_global_mapping[camera_key] = global_id
+                    self.add_mapping(str(camera_id), local_id, global_id)
+            
+            # 매칭된 global_id를 frame_matched_tracks에 추가
+            frame_matched_tracks.add(global_id)
             
             # 좌표 변환
             x1, y1, x2, y2, point_x, point_y = self.image_processor.get_bbox_coordinates(bbox)

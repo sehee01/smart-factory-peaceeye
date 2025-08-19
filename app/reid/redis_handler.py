@@ -212,8 +212,6 @@ class FeatureStoreRedisHandler:
         pattern = f"global_track_data:*:{camera_id}:*"
         data_keys = self.redis.keys(pattern)
 
-        print(f"Redis: Searching for candidates in camera {camera_id}, found {len(data_keys)} data keys")
-
         for raw_key in data_keys:
             try:
                 # 키 파싱
@@ -224,11 +222,8 @@ class FeatureStoreRedisHandler:
                     continue
 
                 global_id = int(key_parts[1])
-                # camera_id 확인 불필요 (이미 패턴으로 필터링됨)
-                # key_camera = key_parts[2]
-                # if key_camera != camera_id_str:
-                #     continue
-
+                local_track_id = int(key_parts[3])  # local_track_id 추출
+                
                 # 값 로드
                 track_data = self.redis.get(data_key)
                 if not track_data:
@@ -237,176 +232,66 @@ class FeatureStoreRedisHandler:
                 if not isinstance(track_info, dict):
                     continue
 
-                # 병합: 동일 global_id의 여러 local_track_id를 하나로
-                entry = result.get(global_id, {'features': [], 'bbox': [0, 0, 0, 0], 'last_seen': 0})
-                features = track_info.get('features', [])
-                if isinstance(features, list):
-                    entry['features'].extend(features)
-                last_seen = int(track_info.get('last_seen', 0))
-                if last_seen >= entry.get('last_seen', 0):
-                    entry['last_seen'] = last_seen
-                    entry['bbox'] = track_info.get('last_bbox', entry['bbox'])
-                result[global_id] = entry
+                # 기존 entry가 있고, 현재 local_track_id가 더 작으면 건너뛰기
+                if global_id in result:
+                    existing_local_id = int(result[global_id].get('local_track_id', 0))
+                    if local_track_id <= existing_local_id:
+                        continue
 
-                print(f"Redis: Found candidate track {global_id} for camera {camera_id}")
+                # 새로운 entry 생성 (기존 것 대체)
+                features = track_info.get('features', [])
+                entry = {
+                    'features': features if isinstance(features, list) else [],
+                    'bbox': track_info.get('last_bbox', [0, 0, 0, 0]),
+                    'last_seen': int(track_info.get('last_seen', 0)),
+                    'local_track_id': local_track_id  # local_track_id 저장
+                }
+                result[global_id] = entry
             except Exception as e:
                 print(f"Redis: Error processing data key {data_key}: {e}")
                 continue
 
-        print(f"Redis: Returning {len(result)} candidates for camera {camera_id}")
         return result
 
     def cleanup_expired_tracks(self, global_frame_counter: int, ttl_frames: int):
-        """만료된 트랙 정리 (신규 per-cam-local 키 기준) - 트래킹 상태 구분"""
-        data_keys = self.redis.keys("global_track_data:*:*:*")
-
-        # global_id별 최대 last_seen 집계 및 상태 정보 수집
-        max_seen_by_global: Dict[int, int] = {}
-        track_status_by_global: Dict[int, Dict] = {}  # 트랙 상태 정보
-        
-        for k in data_keys:
-            try:
-                parts = k.decode().split(":")
-                if len(parts) != 4:
-                    continue
-                global_id = int(parts[1])
-                val = self.redis.get(k)
-                if not val:
-                    continue
-                info = pickle.loads(val)
-                if not isinstance(info, dict):
-                    continue
-                
-                last_seen = int(info.get('last_seen', 0))
-                is_tracking = info.get('is_tracking', True)  # 기본값은 트래킹 중
-                failed_at = info.get('failed_at', None)
-                
-                prev = max_seen_by_global.get(global_id, 0)
-                if last_seen > prev:
-                    max_seen_by_global[global_id] = last_seen
-                
-                # 트랙 상태 정보 수집
-                if global_id not in track_status_by_global:
-                    track_status_by_global[global_id] = {
-                        'is_tracking': False,
-                        'failed_at': None,
-                        'camera_count': set()
-                    }
-                
-                track_status_by_global[global_id]['camera_count'].add(parts[2])
-                if is_tracking:
-                    track_status_by_global[global_id]['is_tracking'] = True
-                if failed_at is not None:
-                    track_status_by_global[global_id]['failed_at'] = failed_at
-                    
-            except Exception:
-                continue
-
-        # 트래킹 상태에 따른 TTL 적용
-        for gid, max_last_seen in max_seen_by_global.items():
-            status_info = track_status_by_global.get(gid, {})
-            is_tracking = status_info.get('is_tracking', False)
-            failed_at = status_info.get('failed_at')
-            camera_count = len(status_info.get('camera_count', set()))
-            
-            if is_tracking:
-                # 트래킹 중인 객체: TTL 무제한 (Redis에서 -1)
-                # print(f"Redis: Track {gid} is actively tracking (TTL: unlimited)")
-                # Redis에서 TTL을 무제한으로 설정
-                data_keys_for_gid = self.redis.keys(f"global_track_data:{gid}:*:*")
-                for key in data_keys_for_gid:
-                    self.redis.persist(key)  # TTL 제거 (무제한)
-            else:
-                # 트래킹에 실패한 객체: TTL 10초
-                if failed_at is not None:
-                    frames_since_failed = global_frame_counter - failed_at
-                    # 10초 = 약 300프레임 (30fps 기준)
-                    if frames_since_failed > 300:  # 10초 경과
-                        self._remove_track(gid)
-                        # print(f"Redis: Expired failed track {gid} (TTL: 10 seconds exceeded)")
-                    else:
-                        # print(f"Redis: Failed track {gid} - TTL: 10 seconds remaining")
-                        pass
-                else:
-                    # 실패 시점이 기록되지 않은 경우 기본 TTL 적용
-                    base_ttl = ttl_frames * self.cleanup_buffer
-                    frames_since_last_seen = global_frame_counter - max_last_seen
-                    if frames_since_last_seen > base_ttl:
-                        self._remove_track(gid)
-                        # print(f"Redis: Expired track {gid} (default TTL)")
-
-    def cleanup_duplicate_tracks_for_global_id(self, global_id: int, camera_id: str):
         """
-        특정 global_id와 camera_id에 대해 중복 키들을 정리
-        새 매칭이 완료된 후 호출되어 기존 키들을 삭제하고 가장 최근 것만 유지
-        
-        Args:
-            global_id: 정리할 글로벌 ID
-            camera_id: 정리할 카메라 ID
+        만료된 트랙들을 정리
         """
         try:
-            # 해당 global_id와 camera_id의 모든 키 조회
-            pattern = f"global_track_data:{global_id}:{camera_id}:*"
+            # 모든 트랙 데이터 키 조회
+            pattern = "global_track_data:*"
             keys = self.redis.keys(pattern)
             
-            if len(keys) <= 1:
-                # 키가 1개 이하면 정리할 필요 없음
-                return 0
-            
-            # 가장 큰 local_track_id 찾기
-            max_local_track_id = -1
-            max_key = None
-            
+            deleted_count = 0
             for raw_key in keys:
                 try:
                     key_parts = raw_key.decode().split(":")
                     if len(key_parts) == 4:
+                        global_id = int(key_parts[1])
+                        camera_id = key_parts[2]
                         local_track_id = int(key_parts[3])
-                        if local_track_id > max_local_track_id:
-                            max_local_track_id = local_track_id
-                            max_key = raw_key
+                        
+                        # 트랙 데이터 로드
+                        track_data = self.redis.get(raw_key)
+                        if track_data:
+                            track_info = pickle.loads(track_data)
+                            last_seen = track_info.get('last_seen', 0)
+                            
+                            # 만료 체크
+                            if global_frame_counter - last_seen > ttl_frames:
+                                self.redis.delete(raw_key)
+                                deleted_count += 1
+                                # print(f"Redis: Expired track {gid} (default TTL)")
+                                
                 except Exception as e:
-                    print(f"Redis: Error parsing key {raw_key}: {e}")
+                    print(f"Redis: Error cleaning up track {raw_key}: {e}")
                     continue
             
-            if max_key is None:
-                return 0
-            
-            # 가장 큰 local_track_id를 제외한 나머지 키들 삭제
-            keys_to_delete = [key for key in keys if key != max_key]
-            
-            if keys_to_delete:
-                self.redis.delete(*keys_to_delete)
-                deleted_count = len(keys_to_delete)
-                print(f"Redis: Cleaned up {deleted_count} duplicate keys for global_id {global_id}, camera {camera_id}")
-                print(f"Redis: Kept key with local_track_id {max_local_track_id}")
-                return deleted_count
-            
-            return 0
-            
+            if deleted_count > 0:
+                print(f"Redis: Cleaned up {deleted_count} expired tracks")
+                
         except Exception as e:
-            print(f"Redis: Error in cleanup_duplicate_tracks_for_global_id: {e}")
-            return 0
-
-    def _remove_track(self, global_id: int):
-        """트랙 완전 제거 (신규 per-cam-local 키만 삭제)"""
-
-        new_data_keys = self.redis.keys(f"global_track_data:{global_id}:*:*")
-        history_keys = self.redis.keys(f"track_history:*:{global_id}")
-        keys_to_delete = list(new_data_keys) + list(history_keys)
-        if keys_to_delete:
-            self.redis.delete(*keys_to_delete)
-
-    def get_track_data(self, global_id: int, camera_id: str, local_track_id: Optional[int] = None) -> Optional[Dict]:
-        """특정 트랙의 데이터를 가져오기"""
-        camera_id_str = str(camera_id)
-        data_key = self._make_track_data_key(global_id, camera_id_str, local_track_id)
-        
-        with self.lock:
-            track_data = self.redis.get(data_key)
-            if track_data:
-                return pickle.loads(track_data)
-            return None
+            print(f"Redis: Error in cleanup_expired_tracks: {e}")
 
     def generate_new_global_id(self) -> int:
         return self.redis.incr(self.global_id_counter_key)

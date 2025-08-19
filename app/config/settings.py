@@ -1,19 +1,19 @@
 # config/settings.py
 
-# YOLO 모델 경로
-YOLO_MODEL_PATH = "models/weights/video.pt"
+# YOLO 모델 경로 (test_ultralytics_tracking.py와 동일하게 설정)
+YOLO_MODEL_PATH = "models/weights/video300.pt"  # test_ultralytics_tracking.py와 동일한 모델
 PRE_REGISTER_MODEL_PATH = "models/weights/yolo11m.pt"
 
-# BYTETracker 설정 (Ultralytics 기본값과 동일)
+# BYTETracker 설정 (더 엄격한 탐지 임계값 적용)
 TRACKER_CONFIG = {
-    # "track_thresh": 0.0,                    # Ultralytics 기본값: 0.6 (탐지 신뢰도 임계값)
-    # "match_thresh": 0.9,                    # Ultralytics 기본값: 0.9 (IOU 매칭 임계값)
-    # "track_buffer": 30,                     # Ultralytics 기본값: 30 (트랙 유지 프레임 수)
-    # "mot20": False,                         # Ultralytics 기본값: False (MOT20 데이터셋 사용 여부)
-    # "frame_rate": 15,                       # Ultralytics 기본값: 30 (프레임 레이트)
-    # "target_width": 640,                    # 프레임 리사이즈 목표 너비
-    # "aspect_ratio_thresh": 1.6,            # Ultralytics 기본값: 1.6 (종횡비 임계값)
-    # "min_box_area": 100,                   # Ultralytics 기본값: 100 (최소 박스 면적)
+     "track_thresh": 0.6,                    # 탐지 신뢰도 임계값 (0.5 → 0.6으로 더 엄격하게)
+     "match_thresh": 0.9,                    # Ultralytics 기본값: 0.9 (IOU 매칭 임계값)
+    "track_buffer": 60,                     # Ultralytics 기본값: 30 (트랙 유지 프레임 수)
+     "mot20": False,                         # Ultralytics 기본값: False (MOT20 데이터셋 사용 여부)
+    "frame_rate": 30,                       # Ultralytics 기본값: 30 (프레임 레이트)
+    "target_width": 640,                    # 프레임 리사이즈 목표 너비
+     "aspect_ratio_thresh": 1.6,            # Ultralytics 기본값: 1.6 (종횡비 임계값)
+     "min_box_area": 100,                   # Ultralytics 기본값: 100 (최소 박스 면적)
 }
 
 # Redis 설정 (글로벌 연결 설정)
@@ -25,15 +25,15 @@ REDIS_CONFIG = {
 # ReID 설정 (원본의 복잡한 설정 반영)
 REID_CONFIG = {
     # 기본 유사도 임계값 (같은/다른 카메라 매칭용)
-    "threshold": 0.8,                    # 기본 유사도 임계값 (0.7~0.9 권장)
+    "threshold": 0.9,                    # 기본 유사도 임계값 (0.7~0.9 권장)
     "ttl": 300,                          # 기본 TTL (초 단위)
     "frame_rate": 15,                    # 프레임 레이트 (FPS)
     "feature_ttl": 3000,                 # Feature TTL (프레임 단위, 100초)
-    "similarity_threshold": 0.3,         # 일반 유사도 임계값 (더 관대한 매칭용)
+    "similarity_threshold": 0.5,         # 일반 유사도 임계값 (더 관대한 매칭용)
     
     # 사전 등록 매칭 설정
     "pre_registration": {
-        "similarity_threshold": 0.66,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
+        "similarity_threshold": 0.65,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
         "min_matching_features": 2,      # 최소 매칭되어야 할 feature 개수 (1~5 권장)
         "max_features_per_id": 10,       # Global ID당 최대 feature 개수 (고정값)
     },
@@ -83,7 +83,7 @@ REID_CONFIG = {
 # 입력 비디오 경로 (원본과 동일)
 VIDEO_INPUT_PATHS = [
     "test_video/TEST100.mp4",
-    "test_video/TEST1.mp4"
+     "test_video/TEST1.mp4"
 ]
 
 # 카메라별 호모그래피 매트릭스 (Ground Truth 캘리브레이션)
