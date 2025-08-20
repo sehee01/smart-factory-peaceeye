@@ -39,15 +39,29 @@ const wss = new WebSocket.Server({ port: WS_PORT, perMessageDeflate: false });
 wss.on("listening", () => console.log(`[WS ] ws://localhost:${WS_PORT}`));
 wss.on("connection", (ws, req) => {
   console.log("[WS ] Unity connected:", req?.socket?.remoteAddress);
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
   ws.on("close",  () => console.log("[WS ] Unity disconnected"));
   ws.on("error",  e  => console.error("[WS ] Error:", e.message));
 });
+
+// Keepalive: 정기 ping으로 끊긴 연결 정리
+const WS_PING_SEC = 30;
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    try { ws.ping(); } catch (_) {}
+  });
+}, WS_PING_SEC * 1000);
 
 // 공용 브로드캐스트 유틸
 function broadcast(type, payload) {
   const msg = JSON.stringify({ type, payload });
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
+    if (client.readyState === WebSocket.OPEN) {
+      try { client.send(msg); } catch (e) { console.error("[WS ] send error:", e.message); }
+    }
   });
 }
 
@@ -86,9 +100,30 @@ app.post("/zones", async (req, res) => {
 app.post("/violations", async (req, res) => {
   const data = req.body;
   console.log("[POST] /violations\n", JSON.stringify(data, null, 2));
+  
+  // 최소 유효성 검사
+  const valid =
+    data &&
+    typeof data === "object" &&
+    typeof data.timestamp === "string" &&
+    Array.isArray(data.workers) &&
+    data.workers.every(w =>
+      w && typeof w.worker_id === "string" &&
+      ("zone_id" in w ? (typeof w.zone_id === "string" || w.zone_id === null) : true) &&
+      w.violations && Array.isArray(w.violations.ppe) && Array.isArray(w.violations.roi)
+    );
+
+  if (!valid) {
+    return res.status(400).json({ ok: false, error: "invalid batch schema" });
+  }
+
   try {
+    // DB 저장: 통짜 페이로드를 넘기고 내부에서 분기/삽입 처리(권장)
     await saveToSQLite(data);
-    broadcast("violation_update", data);
+
+    // WS 브로드캐스트: 클라이언트에서 그대로 파싱해 쓰기 좋도록 원형 유지
+    broadcast("violation", data);
+
     return res.status(200).json({ ok: true });
   } catch (e) {
     console.error("[/violations] DB error:", e);

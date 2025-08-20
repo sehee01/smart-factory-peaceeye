@@ -1,9 +1,9 @@
 # config/settings.py
 
 # YOLO 모델 경로 (test_ultralytics_tracking.py와 동일하게 설정)
-YOLO_MODEL_PATH = "models/weights/yolo11m.pt"  # test_ultralytics_tracking.py와 동일한 모델
-PRE_REGISTER_MODEL_PATH = "models/weights/yolo11m.pt"
-PPE_MODEL_PATH = "models/weights/best_yolo11n.pt"
+YOLO_MODEL_PATH = "app/models/weights/best_yolo12m.engine"  # test_ultralytics_tracking.py와 동일한 모델
+PRE_REGISTER_MODEL_PATH = "app/models/weights/yolo11m.pt"
+PPE_MODEL_PATH = "app/models/weights/best_yolo11n.pt"
 # BYTETracker 설정 (더 엄격한 탐지 임계값 적용)
 TRACKER_CONFIG = {
      "track_thresh": 0.6,                    # 탐지 신뢰도 임계값 (0.5 → 0.6으로 더 엄격하게)
@@ -30,6 +30,15 @@ REID_CONFIG = {
     "frame_rate": 15,                    # 프레임 레이트 (FPS)
     "feature_ttl": 3000,                 # Feature TTL (프레임 단위, 100초)
     "similarity_threshold": 0.5,         # 일반 유사도 임계값 (더 관대한 매칭용)
+    
+    # 재매칭 설정
+    "rematch": {
+        "local_id_fallback_interval": 10,  # local_id 사용 객체 재매칭 간격 (프레임)
+        "pre_registered_interval": 30,     # 사전 등록 객체 재확인 간격 (프레임)
+        "max_rematch_attempts": 5,         # 최대 재매칭 시도 횟수
+        "min_confidence_threshold": 0.6,   # 재매칭 최소 신뢰도
+        "enable_rematch": True,            # 재매칭 기능 활성화 여부
+    },
     
     # 사전 등록 매칭 설정
     "pre_registration": {
@@ -84,9 +93,9 @@ REID_CONFIG = {
 
 # 입력 비디오 경로 (원본과 동일)
 VIDEO_INPUT_PATHS = [
-    "test_video/TEST100.mp4",
-     "test_video/TEST1.mp4"
+    "app/test_video/TEST4.mp4"
 ]
+
 
 # 카메라별 호모그래피 매트릭스 (Ground Truth 캘리브레이션)
 HOMOGRAPHY_MATRICES = {
@@ -154,8 +163,10 @@ MULTITHREADING_CONFIG = {
 
 # GUI 설정 (원본과 동일)
 GUI_CONFIG = {
-    "window_width": 1920,
-    "window_height": 1080,
+    "window_width": 960,
+    "window_height": 540,
+    "window_name_prefix": "Camera",  # 창 이름 접두사
+    "resize_window": True,   # 창 크기 조정 활성화 여부
     "window_normal": True,  # 창 크기 조절 가능
     "display_fps": True,
     "show_coordinates": True,

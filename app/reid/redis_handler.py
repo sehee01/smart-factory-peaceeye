@@ -3,7 +3,7 @@ import pickle
 import threading
 import numpy as np
 from typing import List, Dict, Optional
-from config import settings
+from app.config import settings
 
 
 class FeatureStoreRedisHandler:

@@ -11,7 +11,7 @@ if TORCHREID_PATH not in sys.path:
     sys.path.insert(0, TORCHREID_PATH)
 
 from torchreid.utils.feature_extractor import FeatureExtractor
-from config import settings
+from app.config import settings
 
 
 class ImageProcessor:

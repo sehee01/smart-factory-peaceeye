@@ -3,7 +3,7 @@ from .redis_handler import FeatureStoreRedisHandler
 from .similarity import FeatureSimilarityCalculator
 from .pre_registration import PreRegistrationManager
 from .matchers import PreRegistrationMatcher, SameCameraMatcher, CrossCameraMatcher
-from config import settings
+from app.config import settings
 import numpy as np
 import redis
 import pickle
