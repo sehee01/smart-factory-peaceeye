@@ -198,14 +198,13 @@ pip install -r app/requirements.txt
 
 ```
 
-#### 3-3. 실행 (예시)
+#### 3-3. 실행 
 ```bash
-python ai/run.py \
-  --source ./videos/factory_camA.mp4 \
-  --api http://localhost:5000 \
-  --post workers zones violations \
-  --homography ./configs/homography_camA.yaml \
-  --fps 10
+app/config settings.py에서 모든 설정사항 설정 ( 임계값, 영상주소 등 )
+app/reid 에서 python pre_registration.py 실행 -> pre_img 폴더 안에있는 이미지들 redis에 저장
+app/ 에서 python new_main.py실행 -> 백엔드로 위치정보 PPE위반 사항 전달
+new_main.py , new_main_ultar.py 는 백엔드로 위치전송용 이여서 gui 화면 출력 이루어지지 않음
+new_main_ultra_gui.py 파일을 실행하면 영상에서 처리되는 모습을 확인할 수 있음
 ```
 > 파이프라인: **YOLOv11n 검출 → ByteTrack 추적 → OSNet-IBN ReID → Homography 좌표 변환** →  
 > `{ class, track_id, ppe_status, real_coordinates, timestamp }` JSON을 **/workers**, **/violations**로 POST.
