@@ -1,9 +1,9 @@
 # config/settings.py
 
 # YOLO 모델 경로 (test_ultralytics_tracking.py와 동일하게 설정)
-YOLO_MODEL_PATH = "models/weights/video300.pt"  # test_ultralytics_tracking.py와 동일한 모델
+YOLO_MODEL_PATH = "models/weights/yolo11m.pt"  # test_ultralytics_tracking.py와 동일한 모델
 PRE_REGISTER_MODEL_PATH = "models/weights/yolo11m.pt"
-
+PPE_MODEL_PATH = "models/weights/best_yolo11n.pt"
 # BYTETracker 설정 (더 엄격한 탐지 임계값 적용)
 TRACKER_CONFIG = {
      "track_thresh": 0.6,                    # 탐지 신뢰도 임계값 (0.5 → 0.6으로 더 엄격하게)
@@ -36,6 +36,8 @@ REID_CONFIG = {
         "similarity_threshold": 0.65,     # 사전 등록 매칭용 유사도 임계값 (높은 정확도 필요)
         "min_matching_features": 2,      # 최소 매칭되어야 할 feature 개수 (1~5 권장)
         "max_features_per_id": 10,       # Global ID당 최대 feature 개수 (고정값)
+        "enable_matching_cache": True,   # 매칭 캐시 사용 여부
+        "cache_stats_interval": 10,      # 캐시 통계 출력 간격 (프레임 단위)
     },
     
     # 같은 카메라 내 매칭 설정

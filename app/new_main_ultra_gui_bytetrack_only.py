@@ -244,7 +244,7 @@ def main():
     parser.add_argument(
         '--yolo_model',
         type=str,
-        default="models/weights/video.pt",  # test_ultralytics_tracking.py와 동일한 모델
+        default="models/weights/yolo11n.pt",  # test_ultralytics_tracking.py와 동일한 모델
         help='Path to the YOLOv8 model file for person detection.'
     )
     parser.add_argument(

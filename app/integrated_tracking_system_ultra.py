@@ -17,6 +17,7 @@ from result.performance_logger import PerformanceLogger
 from ppe_detector import PPEDetector
 from backend_client import BackendClient
 from models.mapping.point_transformer import transform_point
+from matching_cache_manager import MatchingCacheManager
 
 
 class IntegratedTrackingSystemUltra:
@@ -67,6 +68,9 @@ class IntegratedTrackingSystemUltra:
         
         # PPE 위반 추적 저장소 (중복 전송 방지)
         self.ppe_violation_history = {}
+        
+        # 사전 등록 매칭 캐시 매니저 초기화
+        self.matching_cache_manager = MatchingCacheManager()
         
         print("Integrated Tracking System (Ultralytics) initialized")
         print(f"Videos: {self.video_paths}")

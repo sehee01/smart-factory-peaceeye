@@ -135,6 +135,10 @@ class GUIVideoProcessor:
                 # GUI 정보 추가
                 self.add_gui_info(processed_frame, camera_id, frame_id, len(detections), avg_fps, violations)
                 
+                # 캐시 통계 출력 (30프레임마다)
+                if frame_id % 30 == 0:
+                    self.tracking_system.matching_cache_manager.print_cache_stats()
+                
                 # 화면에 표시
                 cv2.imshow(window_name, processed_frame)
                 
@@ -158,34 +162,49 @@ class GUIVideoProcessor:
     
     def match_with_pre_registration_only(self, frame, bbox, camera_id, frame_id, local_id):
         """
-        Pre-Registration Matcher만 사용하여 Global ID 결정
-        다른 ReID 매칭 로직은 모두 비활성화
+        Pre-Registration Matcher만 사용하여 Global ID 결정 (캐시 기반)
+        객체가 처음 탐지될 때만 사전 등록 매칭을 수행하고, 이후에는 캐시된 결과 사용
         """
+        # 1. 캐시 확인 (이미 매칭된 객체)
+        cached_global_id = self.tracking_system.matching_cache_manager.get_cached_global_id(camera_id, local_id)
+        if cached_global_id is not None:
+            return cached_global_id
+        
+        # 2. 새로운 객체: 사전 등록 매칭 시도
+        print(f"[DEBUG] 🆕 새로운 객체 탐지: Camera {camera_id}, Local ID {local_id}")
+        
         try:
             # 이미지 크롭
             crop_img = self.tracking_system.image_processor.crop_bbox_from_frame(frame, bbox)
             if crop_img.size == 0:
-                print(f"[DEBUG] 이미지 크롭 실패 - Local ID {local_id} 사용")
+                print(f"[DEBUG] 이미지 크롭 실패 - Local ID {local_id}를 Global ID로 사용")
+                self.tracking_system.matching_cache_manager.add_matching_cache(camera_id, local_id, local_id)
                 return local_id
             
             # Feature 추출
             feature = self.tracking_system.image_processor.extract_feature(crop_img)
             if feature is None:
-                print(f"[DEBUG] Feature 추출 실패 - Local ID {local_id} 사용")
+                print(f"[DEBUG] Feature 추출 실패 - Local ID {local_id}를 Global ID로 사용")
+                self.tracking_system.matching_cache_manager.add_matching_cache(camera_id, local_id, local_id)
                 return local_id
             
-            # Pre-Registration Matcher만 사용
+            # Pre-Registration Matcher 사용
             pre_reg_match = self.tracking_system.reid.pre_reg_matcher.match(feature)
             
             if pre_reg_match:
+                # 매칭 성공: 사전 등록된 Global ID 사용
                 print(f"[DEBUG] ✅ Pre-Registration 매칭 성공: Local {local_id} -> Global {pre_reg_match}")
+                self.tracking_system.matching_cache_manager.add_matching_cache(camera_id, local_id, pre_reg_match)
                 return pre_reg_match
             else:
-                print(f"[DEBUG] ❌ Pre-Registration 매칭 실패: Local ID {local_id} 사용")
+                # 매칭 실패: Local ID를 Global ID로 사용
+                print(f"[DEBUG] ❌ Pre-Registration 매칭 실패: Local ID {local_id}를 Global ID로 사용")
+                self.tracking_system.matching_cache_manager.add_matching_cache(camera_id, local_id, local_id)
                 return local_id
                 
         except Exception as e:
-            print(f"[DEBUG] ❌ Pre-Registration 매칭 중 오류: {e} - Local ID {local_id} 사용")
+            print(f"[DEBUG] ❌ Pre-Registration 매칭 중 오류: {e} - Local ID {local_id}를 Global ID로 사용")
+            self.tracking_system.matching_cache_manager.add_matching_cache(camera_id, local_id, local_id)
             return local_id
     
     def add_gui_info(self, frame, camera_id, frame_id, detection_count, fps, violations):
@@ -275,13 +294,13 @@ def main():
     parser.add_argument(
         '--yolo_model',
         type=str,
-        default="models/weights/video.pt",  # test_ultralytics_tracking.py와 동일한 모델
+        default=settings.YOLO_MODEL_PATH,
         help='Path to the YOLOv8 model file for person detection.'
     )
     parser.add_argument(
         '--ppe_model',
         type=str,
-        default="models/weights/best_yolo11n.pt",
+        default=settings.PPE_MODEL_PATH,
         help='Path to the PPE detection model file.'
     )
     parser.add_argument(
