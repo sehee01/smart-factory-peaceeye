@@ -64,6 +64,50 @@ nvidia-smi   # 리눅스/윈도우 NVIDIA 환경
 
 ---
 
+## Redis 설치 및 서버 실행
+
+### Redis 설치
+
+#### Windows
+1. **Redis 공식 홈페이지에서 다운로드**
+   - https://redis.io/download 에서 Windows용 Redis 다운로드
+   - 또는 https://github.com/microsoftarchive/redis/releases 에서 최신 Windows 버전 다운로드
+
+2. **설치 후 실행**
+   ```cmd
+   # Redis 서버 시작 (관리자 권한 CMD에서)
+   redis-server
+   
+   # Redis CLI 실행
+   # Redis 설치 폴더의 programs 폴더에서
+   cd "C:\Program Files\Redis\programs"
+   redis-cli.exe
+   ```
+
+#### macOS
+```bash
+# Homebrew로 설치
+brew install redis
+
+# Redis 서버 시작
+brew services start redis
+# 또는 수동으로
+redis-server
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+# 패키지 매니저로 설치
+sudo apt update
+sudo apt install redis-server
+
+# Redis 서버 시작
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
+```
+
+---
+
 ## 실행 방법(먼저 읽기)
 
 ### 실행 순서 요약
@@ -71,7 +115,8 @@ nvidia-smi   # 리눅스/윈도우 NVIDIA 환경
 2) **프론트엔드** 실행  
    - React(로그인 셸) 개발 서버: `http://localhost:3000`  
    - Unity WebGL(디지털 트윈): WebGL **빌드 후** 서버 정적 경로에 배포 또는 별도 호스팅
-3) **AI 파이프라인** 실행 (YOLOv11n + ByteTrack + ReID) → **POST**(`/workers`,`/violations`) / **WS**는 Unity가 **수신**
+3) **redis서버** 실행   
+4) **AI 파이프라인** 실행 (YOLOv11n + ByteTrack + ReID) → **POST**(`/workers`,`/violations`) / **WS**는 Unity가 **수신**
 
 ---
 
@@ -148,11 +193,9 @@ python -m pip install --upgrade pip
 
 #### 3-2. 패키지 설치
 ```bash
-pip install ultralytics opencv-python numpy onnxruntime
-# GPU가 있다면 시스템에 맞는 torch/torchvision 휠 선택 (예시는 CUDA 12.1)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-# ReID
-pip install torchreid   # 또는 deep-person-reid
+# 프로젝트 requirements.txt 사용 (권장)
+pip install -r app/requirements.txt
+
 ```
 
 #### 3-3. 실행 (예시)
