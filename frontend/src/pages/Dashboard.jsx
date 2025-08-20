@@ -4,7 +4,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 // Unity 빌드 파일 경로 (public 폴더 기준)
-const unityBuildFolder = "/Build";
+const unityBuildFolder = "/unity/Build";
 const unityBuildJson = "Build.loader.js"; 
 
 function Dashboard() {
