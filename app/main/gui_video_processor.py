@@ -4,6 +4,16 @@ import time
 import threading
 import numpy as np
 import cv2
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+EXTRA_PATHS = [
+    str(PROJECT_ROOT),                      # 루트 자체 (app, ByteTrack, frontend 등 import 가능)
+]
+
+for p in EXTRA_PATHS:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 # np.float 호환성 (일부 OpenCV/의존 라이브러리 대비)
 if not hasattr(np, "float"):

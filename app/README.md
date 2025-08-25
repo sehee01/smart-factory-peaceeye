@@ -8,19 +8,22 @@
 app/
 ├── detector/                      ← ByteTrack 탐지 책임
 │   ├── detector_manager.py        # ByteTrackDetectorManager
-│   └── bytetrack_processor.py     # YOLO + BYTETracker 실행
+│   ├── bytetrack_processor.py     # YOLO + BYTETracker 실행
+│   └── ultralytics_tracker.py     # Ultralytics 기반 트래커
 │
 ├── reid/                          ← ReID 책임
 │   ├── reid_manager.py            # GlobalReIDManager
 │   ├── redis_handler.py           # FeatureStoreRedisHandler
 │   ├── similarity.py              # FeatureSimilarityCalculator
 │   ├── pre_registration.py        # 사전 등록 기능
+│   ├── matchers/                  # 매칭 알고리즘
 │   └── models/                    # ReID 모델
 │       └── weights/               # ReID 모델 가중치
 │
 ├── models/                        ← 모델 및 매핑 관련
 │   ├── main.py                    # 모델 초기화
 │   ├── requirements.txt           # 모델 의존성
+│   ├── pt_to_engine.py           # PyTorch → TensorRT 변환
 │   ├── weights/                   # YOLO 모델 가중치
 │   ├── yolo/                      # YOLO 관련 모듈
 │   ├── result/                    # 결과 저장
@@ -28,6 +31,19 @@ app/
 │       ├── homography_calibration.py  # 호모그래피 보정
 │       ├── point_transformer.py       # 좌표 변환
 │       └── 픽셀추출_실행파일.py       # 픽셀 추출 도구
+│
+├── core/                          ← 핵심 시스템 컴포넌트
+│   ├── tracking_system_ultra.py   # Ultralytics 기반 추적 시스템
+│   └── matching_cache_manager.py  # 매칭 캐시 관리
+│
+├── io/                            ← 입출력 처리
+│   └── backend_client.py          # 백엔드 서버 통신
+│
+├── ppe/                           ← PPE(개인보호장비) 탐지
+│   └── ppe_detector.py            # PPE 탐지 모듈
+│
+├── result/                        ← 결과 및 성능 관리
+│   └── performance_logger.py      # 성능 로깅 및 분석
 │
 ├── config/
 │   └── settings.py                # Thresholds, Redis conf 등 설정 관리
@@ -58,17 +74,32 @@ app/
 ### 🔍 **Detector (객체 탐지)**
 - **`detector_manager.py`**: ByteTrack 탐지 관리자
 - **`bytetrack_processor.py`**: YOLO + ByteTracker 실행
+- **`ultralytics_tracker.py`**: Ultralytics 기반 트래커
 
 ### 🆔 **ReID (재식별)**
 - **`reid_manager.py`**: 글로벌 ReID 관리
 - **`redis_handler.py`**: Redis 데이터 저장/조회
 - **`similarity.py`**: 특징 유사도 계산
 - **`pre_registration.py`**: 사전 등록 기능
+- **`matchers/`**: 다양한 매칭 알고리즘
 
 ### 🗺️ **Mapping (좌표 변환)**
 - **`homography_calibration.py`**: 호모그래피 보정
 - **`point_transformer.py`**: 이미지 좌표 → 실제 좌표 변환
 - **`픽셀추출_실행파일.py`**: 픽셀 추출 도구
+
+### 🧠 **Core System (핵심 시스템)**
+- **`tracking_system_ultra.py`**: Ultralytics 기반 추적 시스템
+- **`matching_cache_manager.py`**: 매칭 캐시 관리
+
+### 🔌 **I/O Processing (입출력 처리)**
+- **`backend_client.py`**: 백엔드 서버와의 통신
+
+### 🦺 **PPE Detection (개인보호장비 탐지)**
+- **`ppe_detector.py`**: PPE 탐지 및 모니터링
+
+### 📊 **Result Management (결과 관리)**
+- **`performance_logger.py`**: 성능 로깅 및 분석
 
 ### 🖼️ **Image Processing**
 - **`image_processor.py`**: 이미지 처리 및 feature 추출
@@ -137,6 +168,9 @@ podman compose ps
 - **좌표 변환**: 이미지 좌표 → 실제 공간 좌표
 - **실시간 추적**: ByteTrack 기반 객체 추적
 - **Redis 캐싱**: 특징 벡터 및 메타데이터 저장
+- **PPE 모니터링**: 개인보호장비 착용 상태 감시
+- **성능 분석**: 시스템 성능 로깅 및 분석
+- **백엔드 연동**: 외부 서버와의 데이터 통신
 
 ## 테스트 데이터
 
